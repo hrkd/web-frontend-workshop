@@ -1,0 +1,7 @@
+{
+  "css": "assets/custom.css",
+  "theme": "black",
+  "revealOptions": {
+    "transition": "slide"
+  }
+}

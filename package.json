@@ -1,0 +1,12 @@
+{
+  "name": "web-frontend-workshop",
+  "version": "1.0.0",
+  "description": "マークアップエンジニア／フロントエンドエンジニア向けステップアップワークショップ",
+  "scripts": {
+    "dev": "reveal-md vol_01/slides.md --watch",
+    "build": "reveal-md vol_01/slides.md --static dist"
+  },
+  "devDependencies": {
+    "reveal-md": "^6.1.4"
+  }
+}
