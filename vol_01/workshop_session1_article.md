@@ -66,22 +66,22 @@
 
 開発やWebサービスの提供に用いるソフトウェアにはいくつかの種類があります。
 
-- **ネイティブアプリ**
 - **ブラウザソフトウェア**
 - **Webサーバーソフトウェア**
 - **ランタイムソフトウェア**
 - **ランタイム上で動作するビルドツールやフレームワーク**
+- **その他ネイティブアプリ**
 
 ### 分布図
 
 | | 開発マシン（自分のPC） | サーバー（24時間稼働のPC） | ユーザーの端末 |
 |---|---|---|---|
-| ネイティブアプリ | Git / VS Code | ffmpeg 等 | Electron製アプリ / iOS・Androidアプリ |
 | ブラウザソフトウェア | - | - | Chrome / Safari / Firefox |
 | 　└ その上で動くもの | - | - | 自作Javascriptプログラム / フレームワーク（React / Vue.js / jQuery / Three.js） |
 | Webサーバーソフトウェア | - | nginx / Apache | - |
 | ランタイムソフトウェア | Node.js | Node.js / PHP | - |
 | 　└ その上で動くもの | Vite / webpack / Sass / PostCSS（ビルドツール） | 自作プログラム / フレームワーク（Next.js / Nuxt / Express / Hono / Laravel） | - |
+| その他ネイティブアプリ | Git / VS Code | ffmpeg 等 | Electron製アプリ / iOS・Androidアプリ |
 
 上記のマトリクスでは、「主に使われる」という意味でソフトウェアを例示していますが、開発マシンでは当然Chromeをつかいますし、Webサーバーも使います。サーバーにChromeやGitをインストールすることももちろん可能です。
 

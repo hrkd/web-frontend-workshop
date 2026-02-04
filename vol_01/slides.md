@@ -53,12 +53,12 @@ title: 第一回：あなたのコードはどこで動いている？
 
 | | 開発マシン | サーバー | ユーザーの端末 |
 |---|---|---|---|
-| ネイティブアプリ | Git / VS Code | ffmpeg 等 | Electron / iOS・Androidアプリ |
 | ブラウザ | - | - | Chrome / Safari / Firefox |
 | 　└ その上で動くもの | - | - | React / Vue.js / jQuery / Three.js |
 | Webサーバー | - | nginx / Apache | - |
 | ランタイム | Node.js | Node.js / PHP | - |
 | 　└ その上で動くもの | Vite / webpack（ビルドツール） | Next.js / Express / Laravel | - |
+| その他ネイティブアプリ | Git / VS Code | ffmpeg 等 | Electron / iOS・Androidアプリ |
 
 ---
 
