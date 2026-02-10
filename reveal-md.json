@@ -2,6 +2,8 @@
   "css": "assets/custom.css",
   "theme": "black",
   "revealOptions": {
-    "transition": "slide"
+    "transition": "slide",
+    "slideNumber": "c/t",
+    "overview": true
   }
 }
