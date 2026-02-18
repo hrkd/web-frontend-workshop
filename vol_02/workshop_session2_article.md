@@ -141,22 +141,33 @@ WAI-ARIA（ワイ・アリア／Web Accessibility Initiative – Accessible Rich
 
 タブUI、アコーディオン、モーダルなど、モダンなUIはHTMLの標準要素だけでは表現できません。`<div>` で組むしかないケースがあります。しかし `<div>` には意味がありません。スクリーンリーダーに何も伝わりません。そこでARIA属性を使います。
 
-#### ロール（role）— 「これは何か」を補足する
+#### ロール（role）— 「これは何か」を伝える
 
 ```html
 <div role="tablist">
-  <button role="tab" aria-selected="true">タブ1</button>
-  <button role="tab" aria-selected="false">タブ2</button>
+  <button role="tab">タブ1</button>
+  <button role="tab">タブ2</button>
 </div>
 ```
 
-#### プロパティ（aria-*）— 「どういう状態か」を補足する
+#### ステート（状態）— 「今どういう状態か」を伝える
+
+`aria-selected`, `aria-expanded`, `aria-hidden` など。ユーザー操作で動的に変わる。
+
+```html
+<button role="tab" aria-selected="true">タブ1</button>
+<button role="tab" aria-selected="false">タブ2</button>
+```
+
+#### プロパティ（属性）— 「何と関連しているか」を伝える
+
+`aria-controls`, `aria-labelledby` など。基本的に変わらない関係性を示す。
 
 ```html
 <button aria-expanded="false" aria-controls="menu">
   メニューを開く
 </button>
-<div id="menu" aria-hidden="true">
+<div id="menu">
   ...メニューの中身...
 </div>
 ```

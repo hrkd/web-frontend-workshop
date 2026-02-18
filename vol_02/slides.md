@@ -226,26 +226,35 @@ WAI-ARIA（ワイ・アリア／Web Accessibility Initiative – Accessible Rich
 
 ---
 
-#### ロール（role）— 「これは何か」を補足する
+#### ロール（role）— 「これは何か」を伝える
 
 ```html
 <div role="tablist">
-  <button role="tab" aria-selected="true">タブ1</button>
-  <button role="tab" aria-selected="false">タブ2</button>
+  <button role="tab">タブ1</button>
+  <button role="tab">タブ2</button>
 </div>
 ```
 
 ---
 
-#### プロパティ（aria-*）— 「どういう状態か」を補足する
+#### ステート（状態）— 「今どういう状態か」を伝える
+
+`aria-selected`, `aria-expanded`, `aria-hidden` など。<br>ユーザー操作で動的に変わる。
 
 ```html
-<button aria-expanded="false" aria-controls="menu">
-  メニューを開く
-</button>
-<div id="menu" aria-hidden="true">
-  ...メニューの中身...
-</div>
+<button role="tab" aria-selected="true">タブ1</button>
+<button role="tab" aria-selected="false">タブ2</button>
+```
+
+---
+
+#### プロパティ（属性）— 「何と関連しているか」を伝える
+
+`aria-controls`, `aria-labelledby` など。<br>基本的に変わらない関係性を示す。
+
+```html
+<button aria-expanded="false" aria-controls="menu">メニューを開く</button>
+<div id="menu">...メニューの中身...</div>
 ```
 
 ---
