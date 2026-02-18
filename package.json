@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "reveal-md vol_01/slides.md --watch",
     "dev:01": "reveal-md vol_01/slides.md --watch",
-    "build": "for dir in vol_*/; do reveal-md ${dir}slides.md --static dist/${dir%/}; done && node scripts/generate-index.js"
+    "build": "for dir in vol_*/; do [ -f \"${dir}slides.md\" ] && reveal-md ${dir}slides.md --static dist/${dir%/}; done; node scripts/generate-index.js"
   },
   "devDependencies": {
     "reveal-md": "^6.1.4"

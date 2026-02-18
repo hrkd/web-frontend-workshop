@@ -1,6 +1,7 @@
 {
   "css": "assets/custom.css",
   "theme": "black",
+  "template": "assets/template.html",
   "revealOptions": {
     "transition": "slide",
     "slideNumber": "c/t",
