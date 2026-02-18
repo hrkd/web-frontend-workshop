@@ -114,10 +114,28 @@
         const currentSlide = Reveal.getCurrentSlide();
         const sectionFooter = document.getElementById('section-footer');
 
-        // 現在のスライドから遡ってh2を探す
+        // 現在のスライドから遡ってh2とh3を探す
         let sectionTitle = '';
+        let subSectionTitle = '';
         let slide = currentSlide;
 
+        // まず現在のスライドから遡ってh3を探す
+        while (slide) {
+          const h3 = slide.querySelector('h3');
+          if (h3) {
+            subSectionTitle = h3.textContent;
+            break;
+          }
+          // h2が見つかったらh3探索を終了
+          const h2 = slide.querySelector('h2');
+          if (h2) {
+            break;
+          }
+          slide = slide.previousElementSibling;
+        }
+
+        // h2を探す（h3の位置から、または現在のスライドから）
+        slide = currentSlide;
         while (slide) {
           const h2 = slide.querySelector('h2');
           if (h2) {
@@ -131,6 +149,8 @@
         const hideFooterSections = ['自己紹介', '目次', '質疑応答', '次回予告', 'ありがとうございました'];
         if (hideFooterSections.some(s => sectionTitle.includes(s)) || !sectionTitle) {
           sectionFooter.textContent = '';
+        } else if (subSectionTitle) {
+          sectionFooter.textContent = sectionTitle + ' > ' + subSectionTitle;
         } else {
           sectionFooter.textContent = sectionTitle;
         }
