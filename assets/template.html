@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+
+    <title>{{{title}}}</title>
+    <link rel="shortcut icon" href="{{{base}}}/favicon.ico" />
+    <link rel="stylesheet" href="{{{base}}}/dist/reset.css" />
+    <link rel="stylesheet" href="{{{base}}}/dist/reveal.css" />
+    <link rel="stylesheet" href="{{{themeUrl}}}" id="theme" />
+    <link rel="stylesheet" href="{{{base}}}{{{highlightThemeUrl}}}" />
+
+    {{#cssPaths}}
+    <link rel="stylesheet" href="{{{.}}}" />
+    {{/cssPaths}}
+
+    {{#watch}}
+    <script>
+      document.write(
+        '<script src="http://' +
+          (location.host || 'localhost').split(':')[0] +
+          ':35729/livereload.js?snipver=1"></' +
+          'script>'
+      );
+    </script>
+    {{/watch}}
+
+    <style>
+      #section-footer {
+        position: fixed;
+        bottom: 20px;
+        left: 30px;
+        font-size: 14px;
+        color: rgba(255, 255, 255, 0.5);
+        z-index: 100;
+        pointer-events: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="reveal">
+      <div class="slides">
+        <section data-markdown {{{slidifyAttributes}}}>
+          <textarea data-template>
+            {{{markdown}}}
+          </textarea>
+        </section>
+      </div>
+    </div>
+
+    <div id="section-footer"></div>
+
+    <script src="{{{base}}}/dist/reveal.js"></script>
+    <script src="{{{base}}}/plugin/markdown/markdown.js"></script>
+    <script src="{{{base}}}/plugin/highlight/highlight.js"></script>
+    <script src="{{{base}}}/plugin/zoom/zoom.js"></script>
+    <script src="{{{base}}}/plugin/notes/notes.js"></script>
+    <script src="{{{base}}}/plugin/math/math.js"></script>
+
+    <script>
+      function extend() {
+        var target = {};
+        for (var i = 0; i < arguments.length; i++) {
+          var source = arguments[i];
+          for (var key in source) {
+            if (source.hasOwnProperty(key)) {
+              target[key] = source[key];
+            }
+          }
+        }
+        return target;
+      }
+
+      var defaultOptions = {
+        controls: true,
+        progress: true,
+        history: true,
+        center: true,
+        transition: 'default',
+        slideNumber: true,
+        highlight: {
+          highlightOnLoad: false
+        },
+        plugins: [
+          RevealMarkdown,
+          RevealHighlight,
+          RevealZoom,
+          RevealNotes,
+          RevealMath
+        ]
+      };
+
+      var queryOptions = Reveal().getQueryHash() || {};
+      var options = extend(defaultOptions, {{{revealOptionsStr}}}, queryOptions);
+    </script>
+
+    {{#scriptPaths}}
+    <script src="{{{.}}}"></script>
+    {{/scriptPaths}}
+
+    <script>
+      Reveal.initialize(options).then(function() {
+        const blocks = Reveal.getRevealElement().querySelectorAll('pre code:not(.mermaid)');
+        const hlp = Reveal.getPlugin('highlight');
+        blocks.forEach(hlp.highlightBlock);
+
+        // セクションフッターの初期化
+        updateSectionFooter();
+        Reveal.on('slidechanged', updateSectionFooter);
+      });
+
+      function updateSectionFooter() {
+        const currentSlide = Reveal.getCurrentSlide();
+        const sectionFooter = document.getElementById('section-footer');
+
+        // 現在のスライドから遡ってh2を探す
+        let sectionTitle = '';
+        let slide = currentSlide;
+
+        while (slide) {
+          const h2 = slide.querySelector('h2');
+          if (h2) {
+            sectionTitle = h2.textContent;
+            break;
+          }
+          slide = slide.previousElementSibling;
+        }
+
+        // 特定のセクションはフッターを非表示
+        const hideFooterSections = ['自己紹介', '目次', '質疑応答', '次回予告', 'ありがとうございました'];
+        if (hideFooterSections.some(s => sectionTitle.includes(s)) || !sectionTitle) {
+          sectionFooter.textContent = '';
+        } else {
+          sectionFooter.textContent = sectionTitle;
+        }
+      }
+    </script>
+  </body>
+</html>
