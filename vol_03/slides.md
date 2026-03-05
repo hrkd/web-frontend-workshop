@@ -354,7 +354,7 @@ ReactはUIの「構造」と「振る舞い」を提供しますが、<br>見た
 
 デモ: Bootstrap + React
 
-./demo/index.html
+[デモを開く](./demo/index.html)
 
 ---
 
