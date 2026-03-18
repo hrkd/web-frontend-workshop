@@ -8,13 +8,7 @@
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
 <body>
-  <div class="container py-4">
-    <h1>Bootstrap + React Demo</h1>
-
-    <!-- React root -->
-    <div id="root"></div>
-  </div>
-
+  <div id="root"></div>
   <!-- Bootstrap JS -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
@@ -27,15 +21,53 @@
 
   <script type="text/babel">
     function App() {
+      const [showAdultsOnly, setShowAdultsOnly] = React.useState(false);
+      const [searchTerm, setSearchTerm] = React.useState('');
+      const [searchedTerm, setSearchedTerm] = React.useState('');
       const rawData = [
         { name: '田中', age: 25 },
         { name: '佐藤', age: 16 },
         { name: '鈴木', age: 32 },
       ];
 
+      const isAdult = (age) => age >= 18;
+
       return (
-        <div>
-          {rawData[0].name}
+        <div className="container py-4">
+          <h1>Bootstrap + React Demo</h1>
+          <hr/>
+            <div className="container mb-4">
+              <form className="card-body row g-3" role="search" onSubmit={(e) => { e.preventDefault(); setSearchedTerm(searchTerm); }}>
+                <input className="col form-control me-2" type="search" placeholder="Search" aria-label="Search" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}/>
+                <button className="col-md-2 btn btn-outline-success" type="submit">Search</button>
+              </form>
+            </div>
+          <table className="table table-striped table-bordered">
+            <thead>
+              <tr>
+                <th>名前</th>
+                <th>年齢</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rawData
+                .filter(person => (!showAdultsOnly || isAdult(person.age)))
+                .filter(person => person.name.includes(searchedTerm))
+                .map((person, index) => (
+                  <tr key={index}>
+                    <td>{person.name}</td>
+                    <td>{person.age}</td>
+                  </tr>
+                ))}
+            </tbody>
+          </table>
+
+          <div className="form-check">
+            <input className="form-check-input" type="checkbox" value="" id="checkDefault" checked={showAdultsOnly} onChange={() => setShowAdultsOnly(!showAdultsOnly)}/>
+            <label className="form-check-label" htmlFor="checkDefault">
+              成人のみ表示
+            </label>
+          </div>
         </div>
       );
     }
