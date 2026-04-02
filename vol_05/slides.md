@@ -27,7 +27,7 @@ SSGではビルド時にHTMLが完成するため、<br>すべてのデータが
 
 ---
 
-今回はSSRの鍵となる<br>**「API」**（外部のデータを取得するための仕組み）について学び、<br>CSRでAPIを使う方法とその課題を理解します。
+今回はSSRの鍵となる<br>**「API」**（外部のデータを取得するための仕組み）について学び、<br>手始めにCSRでAPIを使う方法とその課題を理解します。
 
 ---
 
@@ -74,7 +74,7 @@ PHPやPerl CGIの時代。<br>**「データ」と「見た目」は一体だっ
 
 ---
 
-#### Webアプリケーションの登場
+#### 背景1：Webアプリケーションの登場
 
 2000年代後半、GmailやGoogleマップが登場。<br>ページ遷移なしでUIが変化するアプリケーション。
 
@@ -82,26 +82,21 @@ PHPやPerl CGIの時代。<br>**「データ」と「見た目」は一体だっ
 
 ---
 
-```mermaid
-graph TD
-    A[従来：サーバーが完成したHTMLを返す]
-    B["新発想：サーバーはデータだけを返し
-    表示はブラウザに任せる"]
+**従来：** サーバーが完成したHTMLを返す
 
-    A -->|発想の転換| B
-```
-
----
+**発想の転換：** サーバーは**データだけ**を返し、<br>表示はブラウザに任せる
 
 この「データだけを返す窓口」が**API**。
 
-ブラウザ側でJavaScriptがAPIからデータを取得し、<br>HTMLを組み立てて表示する。<br>これが前回学んだ**CSR**。
-
-CSRの普及により、<br>ブラウザからAPIを叩くスタイルが一般的になった。
+ブラウザ側でJavaScriptがAPIからデータを取得し、<br>HTMLを組み立てて表示する。<br>これが前回学んだ[**CSR**](https://zenn.dev/hrkd/books/cea5b9b7709ab1/viewer/b446d7#csr%EF%BC%88client-side-rendering%EF%BC%89)。
 
 ---
 
-#### モバイルアプリの普及
+#### 背景2：モバイルアプリの普及
+
+2010年代、スマートフォンの普及で<br>同じデータを複数の画面から使いたいニーズが増加。
+
+---
 
 ```mermaid
 graph LR
@@ -112,13 +107,7 @@ graph LR
     API --> Admin[社内管理画面]
 ```
 
----
-
-画面ごとにサーバーを作るのは非効率。
-
-**データを返すAPIを1つ作れば、<br>どのクライアントからでも同じデータを使える。**
-
-これがAPIの最大の利点。
+**APIを1つ作れば、どのクライアントからでも同じデータを使える。**
 
 ---
 
@@ -134,16 +123,19 @@ graph LR
 
 ### APIの用途
 
+大きく3つの用途に分けられます。
+
 ---
 
-#### 1. フロント⇔バック通信
+#### 1. 自社サービス内のフロントエンド⇔バックエンド通信
+
+最も基本的な用途。
 
 ```mermaid
 graph LR
     Frontend["フロントエンド
     React"] <-->|API| Backend["バックエンド
-    Node.js / Rails"]
-    Backend <--> DB[(データベース)]
+    Node.js / Railsなど"]
 ```
 
 商品一覧を取得する、カートに追加する、注文を確定する<br>——すべてAPIを通じたデータのやり取り。
@@ -151,6 +143,8 @@ graph LR
 ---
 
 #### 2. 外部サービス連携
+
+自分たちで作らずに、他社のサービスをAPIで利用するケース。
 
 | サービス | APIでできること |
 |---------|--------------|
@@ -170,6 +164,8 @@ graph LR
 
 #### 3. 公開API（サードパーティAPI）
 
+自社のデータや機能を、外部の開発者に公開するAPI。
+
 | サービス | 公開API |
 |---------|--------|
 | Twitter/X | ツイートの取得・投稿 |
@@ -177,41 +173,41 @@ graph LR
 | YouTube | 動画情報の取得 |
 | PokéAPI | ポケモンデータの取得 |
 
-今回使う**PokéAPI**はこのカテゴリ。
 
 ---
 
-### 技術的な仕組み
+### APIの技術的な仕組み
 
----
-
-#### HTTP リクエスト/レスポンス
-
-```mermaid
-sequenceDiagram
-    participant Browser as ブラウザ
-    participant Server as サーバー
-
-    rect rgb(230, 240, 255)
-    Note over Browser, Server: 普段のWeb閲覧
-    Browser->>Server: このページをください
-    Server->>Browser: HTMLです、どうぞ
-    end
-
-    rect rgb(255, 240, 230)
-    Note over Browser, Server: APIの通信
-    Browser->>Server: このデータをください
-    Server->>Browser: JSONです、どうぞ
-    end
-```
-
-違いは**返ってくるものがHTMLではなくJSON**という点だけ。
+1. REST API
+2. JSON
 
 ---
 
 #### REST API
 
 現在最も広く使われているAPIの設計スタイル。
+
+APIの通信はWebサイトの閲覧と同じ**HTTP**を使う。
+
+```mermaid
+sequenceDiagram
+    participant Browser as ブラウザ
+    participant Server as サーバー
+
+    rect rgba(100, 140, 200, 0.3)
+    Note over Browser, Server: 普段のWeb閲覧
+    Browser->>Server: このページをください
+    Server->>Browser: HTMLです、どうぞ
+    end
+
+    rect rgba(200, 140, 100, 0.3)
+    Note over Browser, Server: APIの通信
+    Browser->>Server: このデータをください
+    Server->>Browser: JSONです、どうぞ
+    end
+```
+
+---
 
 基本的な考え方は<br>「**URLがデータ（リソース）を表す**」
 
@@ -232,13 +228,12 @@ GET /api/v2/type/electric    → でんきタイプの情報
 | **PUT** | 更新する | ユーザー情報を更新 |
 | **DELETE** | 削除する | カートから商品を削除 |
 
-今回は**GET**だけ使います。
 
 ---
 
-#### JSON
+#### JSON（JavaScript Object Notation）
 
-APIがデータを返すときの形式。
+APIがデータを返すときの形式は、ほとんどの場合**JSON**。
 
 ```json
 {
@@ -285,9 +280,13 @@ console.log(data.height);  // 4
 console.log(data.types[0].type.name); // "electric"
 ```
 
+`fetch` はブラウザに組み込まれたAPI通信の関数。
+
 ---
 
 #### PokéAPIの主なエンドポイント
+
+「エンドポイント」とは、APIの各URLのこと。<br>それぞれのURLが異なるデータを返す。
 
 | URL | 返ってくるデータ |
 |-----|---------------|
@@ -340,9 +339,8 @@ sequenceDiagram
 
 ---
 
-## 3. CSRと外部データ
+## 3. CSRと外部データでは補えないポイント
 
-なぜSSRが必要になるのか
 
 ---
 
@@ -374,7 +372,8 @@ CSRではすべてのコードがブラウザで実行される。
 
 開発者ツールを開けば<br>**誰でもAPIキーを見ることができてしまう。**
 
-APIキー、DB接続情報、社内システムのURL……<br>ブラウザに渡してはいけない情報はCSRでは扱えない。
+APIキー、DB接続情報、社内システムのURL……<br>ブラウザに渡してはいけない情報はCSRでは扱えない。<br>
+<br>（StripeのAPIキーが第三者に渡れば、最悪購入者の情報を漏洩することに、、、）
 
 ---
 
@@ -412,8 +411,8 @@ CSRで作ったページのHTMLソース：
 ```html
 <html>
   <body>
-    <div id="app">読み込み中...</div>
-    <script src="/app.js"></script>
+    <div id="root"><p class="p-8">読み込み中...</p></div>
+	...
   </body>
 </html>
 ```
@@ -422,25 +421,12 @@ CSRで作ったページのHTMLソース：
 
 ---
 
-```mermaid
-graph TD
-    subgraph CSR
-        C_Crawler[クローラー] -->|受け取るHTML| C_HTML["&lt;div id='app'&gt;&lt;/div&gt;"]
-        C_HTML -->|結果| C_NG[コンテンツが見えない]
-        style C_NG fill:#fcc,stroke:#c00
-    end
+**CSR：** <br>クローラーが受け取るHTML → <br>`<div id="root">読み込み中...</div>` → コンテンツが見えない
 
-    subgraph SSR
-        S_Crawler[クローラー] -->|受け取るHTML| S_HTML["ピカチュウ
-        でんきタイプ..."]
-        S_HTML -->|結果| S_OK[コンテンツが見える]
-        style S_OK fill:#cfc,stroke:#0a0
-    end
-```
+**SSR：** <br>クローラーが受け取るHTML → <br>`<h1>ピカチュウ</h1><p>でんきタイプ...</p>` → コンテンツが見える
 
----
 
-SNSのOGPクローラー（Twitter、Facebook）は<br>JavaScriptを実行しない。
+また、SNSのOGPクローラー（Twitter、Facebook）も<br>JavaScriptを実行しない。
 
 **検索エンジンにインデックスされたいページ**には<br>SSRが必要。
 
@@ -489,14 +475,6 @@ SSRはCSRの上位互換ではなく、<br>**それぞれに得意な領域が�
 
 ---
 
-### 課題2：ページのソースを確認する
-
-CSR版ポケモン図鑑をブラウザで開き、<br>右クリック →「ページのソースを表示」
-
-- ポケモンのデータはHTMLに含まれていますか？
-- 検索エンジンのクローラーはこのページの内容を理解できるでしょうか？
-
----
 
 ## まとめ
 
@@ -517,4 +495,4 @@ CSR版ポケモン図鑑をブラウザで開き、<br>右クリック →「ペ
 
 第六回：Webアプリケーションと外部接続 2
 
-CSRの課題を解決するSSRを、Next.jsを使って実践します。<br>さらにデータベース（SQLite）との連携にも挑戦します。
+APIの説明ができたところで、やっとSSRをNext.jsを使って実践します。<br>さらにデータベースとの連携にも挑戦します。

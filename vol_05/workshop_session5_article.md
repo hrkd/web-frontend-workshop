@@ -302,24 +302,10 @@ APIの仕組みがわかったところで、まずは**CSR**でポケモンの�
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 </head>
 <body>
-  <div id="root"></div>
+  <div id="root"><p class="p-8">読み込み中...</p></div>
 
   <script type="text/babel">
-    const { useState, useEffect } = React;
-
-    function App() {
-      const [pokemonList, setPokemonList] = useState([]);
-
-      useEffect(() => {
-        fetch('https://pokeapi.co/api/v2/pokemon?limit=20')
-          .then(res => res.json())
-          .then(data => setPokemonList(data.results));
-      }, []);
-
-      if (pokemonList.length === 0) {
-        return <p className="p-8">読み込み中...</p>;
-      }
-
+    function App({ pokemonList }) {
       return (
         <main className="p-8">
           <h1 className="text-2xl font-bold">ポケモン図鑑</h1>
@@ -347,7 +333,13 @@ APIの仕組みがわかったところで、まずは**CSR**でポケモンの�
       );
     }
 
-    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+    fetch('https://pokeapi.co/api/v2/pokemon?limit=20')
+      .then(res => res.json())
+      .then(data => {
+        ReactDOM.createRoot(document.getElementById('root')).render(
+          <App pokemonList={data.results} />
+        );
+      });
   </script>
 </body>
 </html>
@@ -425,7 +417,7 @@ CSRで作ったページのHTMLソースを見てみましょう。
 <!-- CSR：サーバーが返すHTML -->
 <html>
   <body>
-    <div id="app">読み込み中...</div>
+    <div id="root"><p class="p-8">読み込み中...</p></div>
     <script src="/app.js"></script>
   </body>
 </html>
