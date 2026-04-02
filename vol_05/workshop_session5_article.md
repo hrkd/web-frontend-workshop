@@ -1,4 +1,4 @@
-# Next.jsを用いたWebアプリケーション 1
+# Webアプリケーションと外部接続
 
 ## 前回のおさらい
 
@@ -15,7 +15,7 @@
 
 しかし、ユーザーのリクエストに応じて外部からデータを取得し、その結果をHTMLに反映したい場合はどうでしょう？ビルド時には存在しないデータを表示する必要があります。これが**SSR**の出番です。
 
-今回はまず、SSRの鍵となる「API」（外部のデータを取得するための仕組み）について学び、Next.jsを使ってSSRを実践します。
+今回はまず、SSRの鍵となる「API」（外部のデータを取得するための仕組み）について学び、CSRでAPIを使う方法とその課題を理解します。
 
 ---
 
@@ -28,8 +28,7 @@
    - PokéAPIを触ってみる
 2. CSRでAPIを使ってみる
 3. CSRと外部データ — なぜSSRが必要になるのか
-4. Next.jsでSSRを実装する
-5. 演習課題
+4. 演習課題
 
 ---
 
@@ -103,20 +102,6 @@ graph LR
 ```
 
 画面（クライアント）ごとにサーバーを作るのは非効率です。**データを返すAPIを1つ作れば、どのクライアントからでも同じデータを使える**——これがAPIの最大の利点です。
-
-```mermaid
-graph LR
-    API[API サーバー<br>データだけを返す]
-    Web[Webサイト]
-    iOS[iOSアプリ]
-    Android[Androidアプリ]
-    Admin[管理画面]
-
-    API --> Web
-    API --> iOS
-    API --> Android
-    API --> Admin
-```
 
 #### まとめ：APIはなぜ生まれたか
 
@@ -253,19 +238,11 @@ APIがデータを返すときの形式は、ほとんどの場合**JSON**（Jav
 
 JSONはJavaScriptのオブジェクトとほぼ同じ構文で、人間にも読みやすく、プログラムでも扱いやすい形式です。
 
-HTMLとの対比で考えると分かりやすいでしょう。
-
-```mermaid
-graph LR
-    HTML[HTML<br>構造と見た目を含む] -->|用途| Display[ブラウザが表示するためのもの]
-    JSON[JSON<br>データだけ] -->|用途| Process[プログラムが処理するためのもの]
-```
-
 ---
 
 ### PokéAPIを触ってみる
 
-理論はここまでにして、実際にAPIを触ってみましょう。
+実際にAPIを触ってみましょう。
 
 #### ブラウザで叩いてみる
 
@@ -319,31 +296,58 @@ APIの仕組みがわかったところで、まずは**CSR**でポケモンの�
 <head>
   <meta charset="UTF-8">
   <title>ポケモン図鑑（CSR版）</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 </head>
 <body>
-  <h1>ポケモン図鑑</h1>
-  <div id="app">読み込み中...</div>
+  <div id="root"></div>
 
-  <script>
-    async function loadPokemon() {
-      const response = await fetch('https://pokeapi.co/api/v2/pokemon?limit=20');
-      const data = await response.json();
+  <script type="text/babel">
+    const { useState, useEffect } = React;
 
-      const html = data.results.map((pokemon, index) => {
-        const id = index + 1;
-        return `
-          <div style="display:inline-block; text-align:center; margin:8px; padding:16px; border:1px solid #ddd; border-radius:8px;">
-            <img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${id}.png" width="96" height="96" />
-            <p>No.${id}</p>
-            <p><strong>${pokemon.name}</strong></p>
+    function App() {
+      const [pokemonList, setPokemonList] = useState([]);
+
+      useEffect(() => {
+        fetch('https://pokeapi.co/api/v2/pokemon?limit=20')
+          .then(res => res.json())
+          .then(data => setPokemonList(data.results));
+      }, []);
+
+      if (pokemonList.length === 0) {
+        return <p className="p-8">読み込み中...</p>;
+      }
+
+      return (
+        <main className="p-8">
+          <h1 className="text-2xl font-bold">ポケモン図鑑</h1>
+          <div className="grid grid-cols-4 gap-4 mt-4">
+            {pokemonList.map((pokemon, index) => {
+              const id = index + 1;
+              return (
+                <div
+                  key={pokemon.name}
+                  className="border border-gray-300 rounded-lg p-4 text-center"
+                >
+                  <img
+                    src={`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${id}.png`}
+                    alt={pokemon.name}
+                    width={96}
+                    height={96}
+                  />
+                  <p>No.{id}</p>
+                  <p className="font-bold capitalize">{pokemon.name}</p>
+                </div>
+              );
+            })}
           </div>
-        `;
-      }).join('');
-
-      document.getElementById('app').innerHTML = html;
+        </main>
+      );
     }
 
-    loadPokemon();
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
   </script>
 </body>
 </html>
@@ -354,8 +358,8 @@ APIの仕組みがわかったところで、まずは**CSR**でポケモンの�
 ```mermaid
 sequenceDiagram
     participant Browser as ブラウザ
-    participant Server as Webサーバー
     participant API as PokéAPI
+    participant Server as Webサーバー
 
     Browser->>Server: ページをリクエスト
     Server->>Browser: ほぼ空のHTML + JavaScript
@@ -368,8 +372,6 @@ sequenceDiagram
 1. ブラウザはまず「読み込み中...」と表示されたHTMLを受け取る
 2. JavaScriptが実行され、**ブラウザから**PokéAPIにリクエストを送る
 3. データを受け取り、JavaScriptがHTMLを組み立てて画面に表示する
-
-これがCSRです。**ブラウザ（クライアント）がAPIを叩き、HTMLを生成している**。
 
 ここで重要なのは、ブラウザの開発者ツールのネットワークタブを開くと、**PokéAPIへのリクエストが見える**という点です。つまり、ユーザー（＝ブラウザ）が直接APIと通信しています。
 
@@ -395,15 +397,6 @@ const response = await fetch('https://api.example.com/data', {
 ```
 
 CSRではすべてのコードがブラウザで実行されます。つまり、開発者ツールを開けば**誰でもAPIキーを見ることができてしまう**のです。
-
-```mermaid
-graph LR
-    JS[ブラウザのJavaScript] -->|含まれている| Key[APIキーが丸見え]
-    Key -->|第三者に| Danger[悪用される危険]
-
-    style Key fill:#fee,stroke:#c00
-    style Danger fill:#fcc,stroke:#c00
-```
 
 APIキーだけでなく、データベースの接続情報や、社内システムのURLなども同様です。ブラウザに渡してはいけない情報は、CSRでは扱えません。
 
@@ -480,284 +473,41 @@ ECサイトの商品ページ、ブログ記事、企業のサービスページ
 
 ---
 
-## 4. Next.jsでSSRを実装する
+## 4. 演習課題
 
-CSRが外部データのやり取りに適さないケースがわかったところで、Next.jsを使ってSSRを実装してみましょう。
+### 課題1：CSR版ポケモン図鑑の拡張
 
-### Next.jsとは
+今回作成したCSR版のポケモン図鑑に、以下の機能を追加してみましょう。
 
-Next.jsはReactベースのフレームワークで、**SSR・SSG・CSRをページごとに使い分けられる**のが特徴です。前回学んだレンダリング手法をすべてカバーしています。
+- 表示数を20件から151件（初代ポケモン全種）に変更する
+- ポケモンをクリックすると詳細情報（タイプ、高さ、重さ）を表示する
 
-### プロジェクトの作成
+ヒント：`useState` で選択中のポケモンを管理し、クリック時に `/api/v2/pokemon/{id}` を叩いて詳細を取得します。
 
-```bash
-# Next.jsプロジェクトを作成
-npx create-next-app@latest pokemon-app
+### 課題2：ページのソースを確認する
 
-# 設問には以下のように回答
-# ✔ Would you like to use TypeScript? → No
-# ✔ Would you like to use ESLint? → Yes
-# ✔ Would you like to use Tailwind CSS? → Yes
-# ✔ Would you like your code inside a `src/` directory? → No
-# ✔ Would you like to use App Router? → Yes
-# ✔ Would you like to use Turbopack for next dev? → Yes
-# ✔ Would you like to customize the import alias? → No
+CSR版ポケモン図鑑をブラウザで開き、右クリック →「ページのソースを表示」でHTMLソースを確認してみましょう。
 
-# プロジェクトに移動
-cd pokemon-app
-
-# 開発サーバーを起動
-npm run dev
-```
-
-ブラウザで `http://localhost:3000` にアクセスすると、Next.jsの初期画面が表示されます。
-
-### ディレクトリ構成
-
-```
-pokemon-app/
-├── app/
-│   ├── layout.js      ← 全ページ共通のレイアウト
-│   ├── page.js        ← トップページ（ / ）
-│   └── globals.css    ← グローバルCSS
-├── public/            ← 静的ファイル（画像など）
-├── package.json
-└── next.config.mjs
-```
-
-Next.jsの**App Router**では、`app/` フォルダの中のファイル構造がそのままURLに対応します。
-
-```
-app/page.js           → /
-app/about/page.js     → /about
-app/pokemon/page.js   → /pokemon
-app/pokemon/[id]/page.js → /pokemon/1, /pokemon/25, ...
-```
-
-### ポケモン一覧ページの実装
-
-`app/page.js` を以下の内容に置き換えます。
-
-```jsx
-// app/page.js
-
-export default async function Home() {
-  // サーバーでPokéAPIからデータを取得
-  const response = await fetch('https://pokeapi.co/api/v2/pokemon?limit=20');
-  const data = await response.json();
-
-  return (
-    <main className="p-8">
-      <h1 className="text-2xl font-bold">ポケモン図鑑</h1>
-      <div className="grid grid-cols-4 gap-4 mt-4">
-        {data.results.map((pokemon, index) => {
-          const id = index + 1;
-          return (
-            <a
-              key={pokemon.name}
-              href={`/pokemon/${id}`}
-              className="border border-gray-300 rounded-lg p-4 text-center no-underline text-inherit hover:bg-gray-50"
-            >
-              <img
-                src={`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${id}.png`}
-                alt={pokemon.name}
-                width={96}
-                height={96}
-              />
-              <p>No.{id}</p>
-              <p className="font-bold capitalize">{pokemon.name}</p>
-            </a>
-          );
-        })}
-      </div>
-    </main>
-  );
-}
-```
-
-#### CSR版との違いに注目
-
-先ほどのCSR版と見比べてみましょう。
-
-| | CSR版 | Next.js（SSR）版 |
-|---|---|---|
-| `fetch` の実行場所 | ブラウザ | サーバー |
-| データ取得のタイミング | ページ表示後 | ページ表示前 |
-| 「読み込み中...」の表示 | ある | ない |
-| HTMLソース | 空 | データ入り |
-
-Next.jsのサーバーコンポーネント（`async function`）では、`fetch` は**サーバー上で実行**されます。つまり：
-
-```
-1. ユーザーがページにアクセス
-2. Next.jsのサーバーがPokéAPIにリクエスト（サーバー上で実行）
-3. 取得したデータでHTMLを生成
-4. 完成したHTMLをユーザーに返す
-```
-
-ブラウザのネットワークタブを見ても、PokéAPIへのリクエストは見えません。**すべてサーバー上で完結している**からです。
-
-### ポケモン詳細ページの実装
-
-URLの一部をパラメータとして受け取る「動的ルーティング」を使います。
-
-```bash
-# ディレクトリを作成
-mkdir -p app/pokemon/[id]
-```
-
-`app/pokemon/[id]/page.js` を作成します。
-
-```jsx
-// app/pokemon/[id]/page.js
-
-export default async function PokemonDetail({ params }) {
-  const { id } = await params;
-
-  // サーバーでPokéAPIからデータを取得
-  const response = await fetch(`https://pokeapi.co/api/v2/pokemon/${id}`);
-  const pokemon = await response.json();
-
-  return (
-    <main className="p-8 max-w-xl mx-auto">
-      <a href="/" className="text-blue-600 hover:underline">← 一覧に戻る</a>
-
-      <div className="text-center mt-4">
-        <img
-          src={pokemon.sprites.other['official-artwork'].front_default}
-          alt={pokemon.name}
-          width={300}
-          height={300}
-        />
-        <h1 className="text-2xl font-bold capitalize mt-2">
-          No.{pokemon.id} {pokemon.name}
-        </h1>
-      </div>
-
-      <table className="w-full border-collapse mt-4">
-        <tbody>
-          <tr className="border-b border-gray-300">
-            <th className="p-2 text-left">タイプ</th>
-            <td className="p-2">
-              {pokemon.types.map(t => t.type.name).join(', ')}
-            </td>
-          </tr>
-          <tr className="border-b border-gray-300">
-            <th className="p-2 text-left">高さ</th>
-            <td className="p-2">{pokemon.height / 10} m</td>
-          </tr>
-          <tr className="border-b border-gray-300">
-            <th className="p-2 text-left">重さ</th>
-            <td className="p-2">{pokemon.weight / 10} kg</td>
-          </tr>
-          <tr className="border-b border-gray-300">
-            <th className="p-2 text-left">基本経験値</th>
-            <td className="p-2">{pokemon.base_experience}</td>
-          </tr>
-        </tbody>
-      </table>
-
-      <h2 className="text-xl font-bold mt-6">ステータス</h2>
-      <div className="mt-2">
-        {pokemon.stats.map(stat => (
-          <div key={stat.stat.name} className="mb-2">
-            <div className="flex justify-between mb-1">
-              <span className="capitalize">{stat.stat.name}</span>
-              <span>{stat.base_stat}</span>
-            </div>
-            <div className="bg-gray-200 rounded h-2">
-              <div
-                className="bg-green-500 rounded h-full"
-                style={{ width: `${Math.min(stat.base_stat / 255 * 100, 100)}%` }}
-              />
-            </div>
-          </div>
-        ))}
-      </div>
-    </main>
-  );
-}
-```
-
-### SSRであることを確認する
-
-ブラウザで `http://localhost:3000/pokemon/25` にアクセスし、以下を確認してみましょう。
-
-1. **ページのソースを表示**（右クリック →「ページのソースを表示」）
-   - HTMLの中にポケモンの情報が含まれている → SSR
-   - CSRなら `<div id="root"></div>` のような空のHTMLが返る
-
-2. **ブラウザのネットワークタブ**
-   - PokéAPIへのリクエストが**見えない** → サーバーで通信が完結
-
-3. **「読み込み中...」が表示されない**
-   - CSR版では一瞬「読み込み中...」が見えたが、SSRでは最初から完成したページが表示される
-
----
-
-## 5. 演習課題
-
-### 課題1：ポケモンの表示数を増やす
-
-一覧ページの表示数を20件から151件（初代ポケモン全種）に変更してみましょう。
-
-ヒント：`fetch` のURLパラメータを変更します。
-
-### 課題2：タイプ別フィルタページの作成
-
-`/type/[name]` というページを作り、特定のタイプのポケモン一覧を表示してみましょう。
-
-```
-/type/fire      → ほのおタイプのポケモン一覧
-/type/water     → みずタイプのポケモン一覧
-/type/electric  → でんきタイプのポケモン一覧
-```
-
-ヒント：`https://pokeapi.co/api/v2/type/fire` でタイプ別のポケモン一覧が取得できます。
-
-### 課題3（発展）：OGPの設定
-
-Next.jsの `metadata` を使って、詳細ページにOGP情報を設定してみましょう。
-
-```jsx
-// ヒント：generateMetadata関数を使う
-export async function generateMetadata({ params }) {
-  const { id } = await params;
-
-  const response = await fetch(`https://pokeapi.co/api/v2/pokemon/${id}`);
-  const pokemon = await response.json();
-
-  return {
-    title: `No.${pokemon.id} ${pokemon.name}`,
-    description: `${pokemon.name}のステータス・タイプ情報`,
-    openGraph: {
-      title: `No.${pokemon.id} ${pokemon.name}`,
-      images: [pokemon.sprites.other['official-artwork'].front_default],
-    },
-  };
-}
-```
-
-ページのソースを表示して、`<meta property="og:title">` などが出力されることを確認してみてください。
+- ポケモンのデータはHTMLに含まれていますか？
+- 検索エンジンのクローラーはこのページの内容を理解できるでしょうか？
 
 ---
 
 ## まとめ
 
-- **API**はソフトウェア同士のデータのやり取りの仕組み
+- **API**はソフトウェア同士がデータをやり取りするための窓口
   - Webアプリの進化とモバイルの普及により不可欠になった
   - REST APIではURLがデータを表し、JSONでデータを返す
-- **CSRは外部データとのやり取りに適さないケースがある**——それがSSRの導入動機になる
-  - **機密性**：APIキーやDB接続情報をブラウザに渡せない → サーバーで処理すべき
-  - **SEO**：検索エンジンやOGPクローラーにコンテンツを見せたい → 完成したHTMLを返すべき
-- **Next.js**はReactベースのフレームワークで、SSR・SSG・CSRを使い分けられる
-  - サーバーコンポーネントの `fetch` はサーバー上で実行される
-  - ブラウザにはAPIキーもリクエストも露出しない
+- **CSR**ではブラウザがAPIを叩いてHTMLを生成する
+  - 公開APIを使う場合はCSRで十分
+- **CSRは外部データとのやり取りに適さないケースがある**
+  - **機密性**：APIキーやDB接続情報をブラウザに渡せない
+  - **SEO**：検索エンジンやOGPクローラーにコンテンツを見せられない
 
 ---
 
 ## 次回予告
 
-第六回：Next.jsを用いたWebアプリケーション 2
+第六回：Webアプリケーションと外部接続 2
 
-今回の課題をレビューし、Next.jsの理解をさらに深めます。
+CSRの課題を解決するSSRを、Next.jsを使って実践します。さらにデータベース（SQLite）との連携にも挑戦します。
