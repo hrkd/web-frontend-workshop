@@ -85,7 +85,8 @@ PHPやPerl CGIの時代。<br>**「データ」と「見た目」は一体だっ
 ```mermaid
 graph TD
     A[従来：サーバーが完成したHTMLを返す]
-    B[新発想：サーバーはデータだけを返し<br>表示はブラウザに任せる]
+    B["新発想：サーバーはデータだけを返し
+    表示はブラウザに任せる"]
 
     A -->|発想の転換| B
 ```
@@ -139,7 +140,9 @@ graph LR
 
 ```mermaid
 graph LR
-    Frontend[フロントエンド<br>React] <-->|API| Backend[バックエンド<br>Node.js / Rails]
+    Frontend["フロントエンド
+    React"] <-->|API| Backend["バックエンド
+    Node.js / Rails"]
     Backend <--> DB[(データベース)]
 ```
 
@@ -428,7 +431,8 @@ graph TD
     end
 
     subgraph SSR
-        S_Crawler[クローラー] -->|受け取るHTML| S_HTML["&lt;h1&gt;ピカチュウ&lt;/h1&gt;<br>&lt;p&gt;でんきタイプ...&lt;/p&gt;"]
+        S_Crawler[クローラー] -->|受け取るHTML| S_HTML["ピカチュウ
+        でんきタイプ..."]
         S_HTML -->|結果| S_OK[コンテンツが見える]
         style S_OK fill:#cfc,stroke:#0a0
     end
