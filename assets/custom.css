@@ -56,6 +56,12 @@
   font-size: 0.9em;
 }
 
+/* Mermaid図のサイズ調整 */
+.reveal .mermaid svg {
+  max-width: 70% !important;
+  height: auto !important;
+}
+
 /* インラインコードのスタイル */
 .reveal p code,
 .reveal li code {

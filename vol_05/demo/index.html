@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>ポケモン図鑑（CSR版）</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body>
+  <div id="root"><p class="p-8">読み込み中...</p></div>
+
+  <script type="text/babel">
+    function App({ pokemonList }) {
+      return (
+        <main className="p-8">
+          <h1 className="text-2xl font-bold">ポケモン図鑑</h1>
+          <div className="grid grid-cols-4 gap-4 mt-4">
+            {pokemonList.map((pokemon, index) => {
+              const id = index + 1;
+              return (
+                <div
+                  key={pokemon.name}
+                  className="border border-gray-300 rounded-lg p-4 text-center"
+                >
+                  <img
+                    src={`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${id}.png`}
+                    alt={pokemon.name}
+                    width={96}
+                    height={96}
+                  />
+                  <p>No.{id}</p>
+                  <p className="font-bold capitalize">{pokemon.name}</p>
+                </div>
+              );
+            })}
+          </div>
+        </main>
+      );
+    }
+
+    fetch('https://pokeapi.co/api/v2/pokemon?limit=20')
+      .then(res => res.json())
+      .then(data => {
+        ReactDOM.createRoot(document.getElementById('root')).render(
+          <App pokemonList={data.results} />
+        );
+      });
+  </script>
+</body>
+</html>
