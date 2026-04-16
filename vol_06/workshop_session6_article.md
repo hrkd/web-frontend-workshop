@@ -2,7 +2,7 @@
 
 ## 前回のおさらい
 
-前回は「API」と「CSR」について学びました。
+前回は「API」について学びました。
 
 - **API**はソフトウェア同士がデータをやり取りするための窓口
 - **CSR**ではブラウザがAPIを叩いてHTMLを生成する
@@ -10,34 +10,196 @@
   - **機密性**：APIキーやDB接続情報をブラウザに渡せない
   - **SEO**：検索エンジンやOGPクローラーにコンテンツを見せられない
 
-今回はこれらの課題を解決する**SSR**を、Next.jsを使って実践します。さらに、APIだけでなく**データベース（SQLite）**との連携にも挑戦します。
+今回はこれらの課題を解決する**SSR**を、Next.jsを使って理解します。さらに、APIだけでなく**データベース（DB）**という外部接続についても学びます。
 
 ---
 
 ## 目次
 
-1. Next.jsでSSRを実装する
-   - プロジェクトのセットアップ
-   - ポケモン一覧ページの実装
-   - ポケモン詳細ページの実装
-   - SSRであることを確認する
+1. Next.jsとSSR
 2. SSRが活きるポイント
-3. データベース連携（SQLite）
-   - DBとは何か
-   - Next.jsからSQLiteに接続する
-4. 演習課題
+3. データベース連携
+4. 演習：Next.jsでポケモン図鑑を作る
 
 ---
 
-## 1. Next.jsでSSRを実装する
-
-CSRが外部データのやり取りに適さないケースがわかったところで、Next.jsを使ってSSRを実装してみましょう。
+## 1. Next.jsとSSR
 
 ### Next.jsとは
 
-Next.jsはReactベースのフレームワークで、**SSR・SSG・CSRをページごとに使い分けられる**のが特徴です。前々回学んだレンダリング手法をすべてカバーしています。
+前回、CSRではブラウザが直接APIを叩くため、機密情報の露出やSEOの問題があることを学びました。SSRではAPI通信を**サーバーが代行**することでこれらを解決します。
 
-### プロジェクトの作成
+Next.jsはReactベースのフレームワークで、**SSR・SSG・CSRをページごとに使い分けられる**のが特徴です。第四回で学んだレンダリング手法をすべてカバーしています。
+
+### Next.jsのサーバーコンポーネント
+
+Next.jsでは、コンポーネントを `async function` として定義すると**サーバーコンポーネント**になります。サーバーコンポーネント内の `fetch` はサーバー上で実行されます。
+
+```jsx
+// これがサーバーコンポーネント
+export default async function Home() {
+  // この fetch はサーバーで実行される（ブラウザではない）
+  const response = await fetch('https://pokeapi.co/api/v2/pokemon?limit=20');
+  const data = await response.json();
+
+  return <div>{/* データを使ってHTMLを生成 */}</div>;
+}
+```
+
+前回のCSR版では `useEffect` と `useState` を使ってブラウザ上でデータを取得しました。これはページ表示**後**にデータを取得・保存する必要があったためです。SSRではデータ取得が表示**前**に完了するので、これらは不要になり、関数の中で直接 `await fetch()` するだけで済みます。
+
+| | CSR版（前回） | SSR版（Next.js） |
+|---|---|---|
+| `fetch` の実行場所 | ブラウザ | サーバー |
+| データ取得のタイミング | ページ表示**後** | ページ表示**前** |
+| 「読み込み中...」の表示 | ある | ない |
+| HTMLソースにデータが含まれるか | 含まれない | 含まれる |
+| `useState` / `useEffect` | 必要 | 不要 |
+
+### App Routerとファイルベースルーティング
+
+Next.jsの**App Router**では、`app/` フォルダのファイル構造がそのままURLに対応します。
+
+```
+app/page.js              → /
+app/about/page.js        → /about
+app/pokemon/page.js      → /pokemon
+app/pokemon/[id]/page.js → /pokemon/1, /pokemon/25, ...
+```
+
+`[id]` のように角括弧で囲んだフォルダ名は**動的ルーティング**です。URLの一部をパラメータとして受け取れます。
+
+```jsx
+// app/pokemon/[id]/page.js
+export default async function PokemonDetail({ params }) {
+  const { id } = await params;  // URLから id を取得
+  // /pokemon/25 にアクセスすると id = "25"
+}
+```
+
+HTMLファイルをいくつも手書きしなくても、1つのテンプレートで無数のページを生成できる——これがフレームワークの力です。
+
+---
+
+## 2. SSRが活きるポイント
+
+前回、CSRの課題として「機密情報の露出」と「SEOの問題」を挙げました。SSRがこれらをどう解決するか、改めて整理します。
+
+### 機密情報の保護
+
+SSRではAPI通信がサーバー上で完結します。APIキーやDB接続情報はサーバーにだけ存在し、ブラウザには完成したHTMLだけが返ります。
+
+### SEOとOGP
+
+SSRで返されるHTMLには最初からコンテンツが含まれているため、検索エンジンやSNSのOGPクローラーが正しく認識できます。
+
+Next.jsでは `generateMetadata` 関数を使って、ページごとに動的なOGP情報を設定することもできます。
+
+```jsx
+// ページごとにタイトルやOGP画像を動的に設定できる
+export async function generateMetadata({ params }) {
+  const { id } = await params;
+  const response = await fetch(`https://pokeapi.co/api/v2/pokemon/${id}`);
+  const pokemon = await response.json();
+
+  return {
+    title: `No.${pokemon.id} ${pokemon.name}`,
+    openGraph: {
+      title: `No.${pokemon.id} ${pokemon.name}`,
+      images: [pokemon.sprites.other['official-artwork'].front_default],
+    },
+  };
+}
+```
+
+ECサイトの商品ページやブログ記事など、**検索やSNSシェアで見つけてもらいたいページ**にはSSRが適しています。
+
+---
+
+## 3. データベースへの接続
+
+前回と今回のセクション1〜2では、サーバーからAPIを通じてデータを取得する方法を扱いました。ここでは**データベース（DB）に直接接続する**方法を学びます。
+
+### データベースとは何か
+
+データベースは、データを構造的に保存・管理するためのソフトウェアです。ユーザー情報、投稿データ、注文履歴など、アプリケーションが扱うデータを**永続的に記録**するために使います。
+
+第一回の分布図を思い出してください。分布図ではソフトウェアを「ブラウザ」「Webサーバー」「ランタイム」「ネイティブアプリ」に分類しました。データベースはこのどれにあたるでしょうか？
+
+実は、データベースは**Webサーバー（nginxやApache）と似た性質**を持っています。
+
+| | Webサーバー | データベースサーバー |
+|---|---|---|
+| 役割 | HTTPリクエストを受けてレスポンスを返す | データの読み書きリクエストを受けて結果を返す |
+| 動作 | サーバー上で常に起動し、接続を待ち受ける | サーバー上で常に起動し、接続を待ち受ける |
+| 操作方法 | ブラウザやプログラムから接続 | CLIやプログラムから接続 |
+| 例 | nginx, Apache | MySQL, PostgreSQL |
+
+どちらも**サーバー上で常駐し、他のプログラムからの接続を受け付ける**ソフトウェアです。Webサーバーがブラウザからの接続を待っているように、データベースもプログラムからの接続を待っています。
+
+操作はCLI（コマンドラインインターフェース）で行うのが基本です。
+
+```bash
+# MySQLの例：CLIでDBに接続してSQL文でデータを操作する
+mysql -u root -p
+mysql> SELECT * FROM users WHERE id = 1;
+```
+
+MySQL/PostgreSQLは**独立したソフトウェア**としてサーバー上で常駐し、Next.jsなどのアプリケーションからネットワーク経由で接続します。一方、今回使うSQLiteは独立したソフトウェアではなく、**Next.jsのプログラムの一部として動作**します。npmでインストールしたライブラリがDBファイルを直接読み書きする仕組みです。接続の形態は異なりますが、SQLでデータを操作する点は同じです。
+
+### Next.jsからDBに接続する
+
+前回扱ったAPIは、データのやり取りをする**通信の手段**でした。APIの向こう側にデータベースがあることも多く、たとえばPokéAPIも裏側ではポケモンのデータをDBに保存しています。
+
+```
+ブラウザ → API → サーバー → データベース    ← よくある構成
+            サーバー → データベース           ← 直接操作（今回やること）
+```
+
+このように**APIの裏にDBがある**のが一般的です。今回は、自分のサーバーからDBを直接操作するパターンを体験します。
+
+### なぜDBへの接続はサーバーで行うのか
+
+DB接続にはホスト名・ユーザー名・パスワードなどの接続情報が必要です。これらはAPIキーと同様に機密情報であり、ブラウザに渡すべきではありません。
+
+また、DB接続情報がブラウザに露出すると、誰でもデータの読み書きができてしまいます。そのためDB接続はサーバーを経由して行うのが一般的です。
+
+だからこそ、SSR（サーバーでHTMLを生成する仕組み）がDB連携と相性がよいのです。
+
+### SQLiteとは
+
+今回の演習ではSQLiteを使います。SQLiteはファイルベースの軽量なデータベースです。
+
+- **サーバープロセス不要**：DBファイル1つで動作する（MySQLやPostgreSQLのような別プロセスが不要）
+- **セットアップ簡単**：npmパッケージをインストールするだけ
+- **SQL対応**：MySQL/PostgreSQLと同じSQLで操作できる
+
+```sql
+-- こんな感じでデータを操作する
+SELECT * FROM bookmarks ORDER BY created_at DESC;
+INSERT INTO bookmarks (pokemon_id, pokemon_name, note) VALUES (25, 'pikachu', 'でんきタイプの代表格');
+```
+
+本格的なサービスではPostgreSQLやMySQLを使いますが、学習用途や小規模アプリのローカルデータ保存にはSQLiteが最適です。
+
+---
+
+## 4. 演習：Next.jsでポケモン図鑑を作る
+
+ここからは実際にコードを書いて、SSRとDB連携を体験します。
+
+### 演習の全体像
+
+前回CSRで作ったポケモン図鑑を、Next.js（SSR）で作り直します。さらにSQLiteを使ったお気に入り機能を追加します。
+
+```
+完成イメージ：
+/              → ポケモン一覧（SSR + PokéAPI）
+/pokemon/25    → ポケモン詳細（SSR + PokéAPI）
+/bookmarks     → お気に入り一覧（SSR + SQLite）
+```
+
+### Step 1：プロジェクトの作成
 
 ```bash
 # Next.jsプロジェクトを作成
@@ -52,16 +214,14 @@ npx create-next-app@latest pokemon-app
 # ✔ Would you like to use Turbopack for next dev? → Yes
 # ✔ Would you like to customize the import alias? → No
 
-# プロジェクトに移動
+# プロジェクトに移動して開発サーバーを起動
 cd pokemon-app
-
-# 開発サーバーを起動
 npm run dev
 ```
 
 ブラウザで `http://localhost:3000` にアクセスすると、Next.jsの初期画面が表示されます。
 
-### ディレクトリ構成
+プロジェクトの構成を確認しましょう。
 
 ```
 pokemon-app/
@@ -74,16 +234,7 @@ pokemon-app/
 └── next.config.mjs
 ```
 
-Next.jsの**App Router**では、`app/` フォルダの中のファイル構造がそのままURLに対応します。
-
-```
-app/page.js           → /
-app/about/page.js     → /about
-app/pokemon/page.js   → /pokemon
-app/pokemon/[id]/page.js → /pokemon/1, /pokemon/25, ...
-```
-
-### ポケモン一覧ページの実装
+### Step 2：ポケモン一覧ページ
 
 `app/page.js` を以下の内容に置き換えます。
 
@@ -105,7 +256,8 @@ export default async function Home() {
             <a
               key={pokemon.name}
               href={`/pokemon/${id}`}
-              className="border border-gray-300 rounded-lg p-4 text-center no-underline text-inherit hover:bg-gray-50"
+              className="border border-gray-300 rounded-lg p-4 text-center
+                         no-underline text-inherit hover:bg-gray-50"
             >
               <img
                 src={`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${id}.png`}
@@ -124,36 +276,11 @@ export default async function Home() {
 }
 ```
 
-#### CSR版との違いに注目
+ブラウザで確認したら、**ページのソースを表示**してみましょう。CSR版と違い、HTMLの中にポケモンのデータが含まれているはずです。
 
-前回のCSR版と見比べてみましょう。
+### Step 3：ポケモン詳細ページ
 
-| | CSR版 | Next.js（SSR）版 |
-|---|---|---|
-| `fetch` の実行場所 | ブラウザ | サーバー |
-| データ取得のタイミング | ページ表示後 | ページ表示前 |
-| 「読み込み中...」の表示 | ある | ない |
-| HTMLソース | 空 | データ入り |
-
-Next.jsのサーバーコンポーネント（`async function`）では、`fetch` は**サーバー上で実行**されます。つまり：
-
-```mermaid
-sequenceDiagram
-    participant Browser as ブラウザ
-    participant Server as Next.jsサーバー
-    participant API as PokéAPI
-
-    Browser->>Server: ページをリクエスト
-    Server->>API: ポケモンデータを取得
-    API->>Server: JSONデータ
-    Server->>Browser: 完成したHTML
-```
-
-ブラウザのネットワークタブを見ても、PokéAPIへのリクエストは見えません。**すべてサーバー上で完結している**からです。
-
-### ポケモン詳細ページの実装
-
-URLの一部をパラメータとして受け取る「動的ルーティング」を使います。
+動的ルーティングを使って、各ポケモンの詳細ページを作ります。
 
 ```bash
 # ディレクトリを作成
@@ -233,9 +360,9 @@ export default async function PokemonDetail({ params }) {
 }
 ```
 
-### SSRであることを確認する
+#### SSRであることを確認しよう
 
-ブラウザで `http://localhost:3000/pokemon/25` にアクセスし、以下を確認してみましょう。
+`http://localhost:3000/pokemon/25` にアクセスして、以下を確認してみましょう。
 
 1. **ページのソースを表示**（右クリック →「ページのソースを表示」）
    - HTMLの中にポケモンの情報が含まれている → SSR
@@ -247,94 +374,18 @@ export default async function PokemonDetail({ params }) {
 3. **「読み込み中...」が表示されない**
    - CSR版では一瞬「読み込み中...」が見えたが、SSRでは最初から完成したページが表示される
 
----
+### Step 4：SQLiteでお気に入り機能
 
-## 2. SSRが活きるポイント
+ここからDBとの連携を体験します。
 
-### 機密情報の保護
-
-前回学んだ通り、SSRではAPIキーやDB接続情報がサーバーに留まります。ブラウザには完成したHTMLだけが返るため、機密情報が露出しません。
-
-### SEOとOGP
-
-SSRで返されるHTMLには最初からコンテンツが含まれているため、検索エンジンのクローラーやSNSのOGPクローラーが正しくコンテンツを認識できます。
-
-Next.jsでは `generateMetadata` 関数を使って、ページごとに動的なOGP情報を設定できます。
-
-```jsx
-// ヒント：generateMetadata関数を使う
-export async function generateMetadata({ params }) {
-  const { id } = await params;
-
-  const response = await fetch(`https://pokeapi.co/api/v2/pokemon/${id}`);
-  const pokemon = await response.json();
-
-  return {
-    title: `No.${pokemon.id} ${pokemon.name}`,
-    description: `${pokemon.name}のステータス・タイプ情報`,
-    openGraph: {
-      title: `No.${pokemon.id} ${pokemon.name}`,
-      images: [pokemon.sprites.other['official-artwork'].front_default],
-    },
-  };
-}
-```
-
----
-
-## 3. データベース連携（SQLite）
-
-ここまでは外部APIとの接続を扱いました。もうひとつの重要な外部接続が**データベース（DB）**です。
-
-### DBとは何か
-
-APIが「他のサーバーからデータを借りてくる」仕組みだとすれば、DBは「**自分のサーバーにデータを保存して、読み書きする**」仕組みです。
-
-| | API | DB |
-|---|---|---|
-| データの場所 | 他社・外部のサーバー | 自分のサーバー |
-| 操作 | 主にデータの取得（GET） | 読み書き両方（CRUD） |
-| 接続情報 | APIキー | DB接続文字列（ホスト、ユーザー、パスワード） |
-| 例 | PokéAPI、Stripe | MySQL、PostgreSQL、SQLite |
-
-APIで取得するデータは他社が管理していますが、DBのデータは**自分たちが管理する**ものです。ユーザー情報、投稿データ、注文履歴などがこれにあたります。
-
-### なぜDBもSSRで扱うべきか
-
-DB接続情報（ホスト名、パスワード等）はAPIキーと同様、**ブラウザに渡してはいけない**機密情報です。そもそもブラウザから直接DBに接続することは通常できません。DBへのアクセスは必ずサーバーを経由します。
-
-```mermaid
-sequenceDiagram
-    participant Browser as ブラウザ
-    participant Server as Next.jsサーバー
-    participant DB as SQLite
-
-    Browser->>Server: ページをリクエスト
-    Server->>DB: データを取得
-    DB->>Server: 結果を返す
-    Server->>Browser: 完成したHTML
-```
-
-### SQLiteとは
-
-SQLiteはファイルベースの軽量なデータベースです。
-
-- **サーバー不要**：DBファイル1つで動作する
-- **セットアップ不要**：npmパッケージをインストールするだけ
-- **SQL対応**：MySQL/PostgreSQLと同じSQLが使える
-
-ワークショップでの学習に最適です。
-
-### Next.jsからSQLiteに接続する
-
-#### セットアップ
+#### 4-1. セットアップ
 
 ```bash
 # better-sqlite3をインストール
 npm install better-sqlite3
 ```
 
-#### データベースの準備
+#### 4-2. データベースの初期化
 
 プロジェクトのルートに `init-db.js` を作成し、初期データを投入します。
 
@@ -344,6 +395,7 @@ const Database = require('better-sqlite3');
 
 const db = new Database('app.db');
 
+// テーブルを作成
 db.exec(`
   CREATE TABLE IF NOT EXISTS bookmarks (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -372,7 +424,7 @@ db.close();
 node init-db.js
 ```
 
-#### お気に入りページの実装
+#### 4-3. お気に入り一覧ページ
 
 `app/bookmarks/page.js` を作成します。
 
@@ -383,6 +435,7 @@ import Database from 'better-sqlite3';
 export const dynamic = 'force-dynamic';
 
 export default function BookmarksPage() {
+  // サーバーでSQLiteからデータを取得
   const db = new Database('app.db');
   const bookmarks = db.prepare('SELECT * FROM bookmarks ORDER BY created_at DESC').all();
   db.close();
@@ -397,7 +450,8 @@ export default function BookmarksPage() {
           <a
             key={bookmark.id}
             href={`/pokemon/${bookmark.pokemon_id}`}
-            className="flex items-center gap-4 p-4 border-b border-gray-200 hover:bg-gray-50"
+            className="flex items-center gap-4 p-4 border-b border-gray-200
+                       no-underline text-inherit hover:bg-gray-50"
           >
             <img
               src={`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${bookmark.pokemon_id}.png`}
@@ -419,22 +473,23 @@ export default function BookmarksPage() {
 
 #### ポイント
 
-- `Database('app.db')` — SQLiteファイルに直接接続している
+このページでは外部APIではなく、**自分のDB（SQLite）**からデータを取得しています。
+
+- `Database('app.db')` — SQLiteファイルに直接接続
 - この接続は**サーバー上でのみ実行**される（ブラウザにDB接続情報は渡らない）
 - SQLを使ってデータを取得し、HTMLに反映してからブラウザに返す
-- これもSSRの一形態：**サーバーが外部（DB）からデータを取得し、HTMLを生成して返す**
 
----
+APIから取得する場合もDBから取得する場合も、**サーバーが外部からデータを取得し、HTMLを生成して返す**という点で同じSSRの構造です。
 
-## 4. 演習課題
+### チャレンジ課題
 
-### 課題1：ポケモンの表示数を増やす
+#### 課題1：表示数を増やす
 
 一覧ページの表示数を20件から151件（初代ポケモン全種）に変更してみましょう。
 
 ヒント：`fetch` のURLパラメータを変更します。
 
-### 課題2：タイプ別フィルタページの作成
+#### 課題2：タイプ別ページ
 
 `/type/[name]` というページを作り、特定のタイプのポケモン一覧を表示してみましょう。
 
@@ -446,12 +501,9 @@ export default function BookmarksPage() {
 
 ヒント：`https://pokeapi.co/api/v2/type/fire` でタイプ別のポケモン一覧が取得できます。
 
-### 課題3（発展）：お気に入り機能の完成
+#### 課題3（発展）：お気に入り追加機能
 
-お気に入りページに、以下の機能を追加してみましょう。
-
-- ポケモン詳細ページに「お気に入りに追加」ボタンを設置
-- ボタンを押すとSQLiteのbookmarksテーブルにデータを追加する
+ポケモン詳細ページに「お気に入りに追加」ボタンを設置し、ボタンを押すとSQLiteのbookmarksテーブルにデータを追加できるようにしてみましょう。
 
 ヒント：Next.jsの **Server Actions** を使うと、フォーム送信でサーバー側の処理を実行できます。
 
@@ -459,14 +511,12 @@ export default function BookmarksPage() {
 
 ## まとめ
 
-- **SSR**はサーバーが外部（API・DB）からデータを取得し、HTMLを生成して返す手法
+- **SSR**はサーバーが（外部APIやDBからデータを取得し）、HTMLを生成して返す手法
 - **Next.js**ではサーバーコンポーネントの `fetch` やDB接続がサーバー上で実行される
   - ブラウザにはAPIキーやDB接続情報は渡らない
   - 完成したHTMLが返るのでSEO・OGPに有利
-- 外部接続には大きく2種類ある
-  - **API**：他社・外部サーバーからデータを取得する
-  - **DB**：自分のサーバーにデータを保存・取得する
-- どちらもSSRで扱うことで、機密性とSEOの課題を解決できる
+- 今回はサーバーからの外部接続として**API**と**DB**を扱った
+- いずれもSSRで扱うことで、機密情報をブラウザに露出させずに済む
 
 ---
 
