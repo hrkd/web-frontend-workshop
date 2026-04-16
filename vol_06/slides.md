@@ -414,11 +414,7 @@ export async function generateMetadata({ params }) {
     },
   };
 }
-```
 
----
-
-```jsx
 export default async function PokemonDetail({ params }) {
   const { id } = await params;
 
@@ -441,11 +437,7 @@ export default async function PokemonDetail({ params }) {
           No.{pokemon.id} {pokemon.name}
         </h1>
       </div>
-```
 
----
-
-```jsx
       <table className="w-full border-collapse mt-4">
         <tbody>
           <tr className="border-b border-gray-300">
@@ -468,11 +460,7 @@ export default async function PokemonDetail({ params }) {
           </tr>
         </tbody>
       </table>
-```
-
----
-
-```jsx
+      
       <h2 className="text-xl font-bold mt-6">ステータス</h2>
       <div className="mt-2">
         {pokemon.stats.map(stat => (
@@ -501,11 +489,11 @@ export default async function PokemonDetail({ params }) {
 
 `http://localhost:3000/pokemon/25` にアクセスして、<br>以下を確認してみましょう。
 
+---
+
 1. **ページのソースを表示**（右クリック →「ページのソースを表示」）
    - HTMLの中にポケモンの情報が含まれている → SSR
    - CSRなら `<div id="root"></div>` のような空のHTMLが返る
-
----
 
 2. **ブラウザのネットワークタブ**
    - PokéAPIへのリクエストが**見えない** → サーバーで通信が完結
@@ -678,8 +666,8 @@ APIから取得する場合もDBから取得する場合も、<br>**サーバー
 - **Next.js**ではサーバーコンポーネントの `fetch` やDB接続がサーバー上で実行される
   - ブラウザにはAPIキーやDB接続情報は渡らない
   - 完成したHTMLが返るのでSEO・OGPに有利
+- **動的ルーティング**（`[id]`）とSSRを組み合わせると、<br>リクエスト時にしか内容が決まらないページも生成できる
 - 今回はサーバーからの外部接続として**API**と**DB**を扱った
-- いずれもSSRで扱うことで、機密情報をブラウザに露出させずに済む
 
 ---
 
