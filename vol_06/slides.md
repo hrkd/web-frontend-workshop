@@ -399,6 +399,26 @@ mkdir -p app/pokemon/[id]
 ```jsx
 // app/pokemon/[id]/page.js
 
+export async function generateMetadata({ params }) {
+  const { id } = await params;
+
+  const response = await fetch(`https://pokeapi.co/api/v2/pokemon/${id}`);
+  const pokemon = await response.json();
+
+  return {
+    title: `No.${pokemon.id} ${pokemon.name}`,
+    description: `${pokemon.name}のステータス・タイプ情報`,
+    openGraph: {
+      title: `No.${pokemon.id} ${pokemon.name}`,
+      images: [pokemon.sprites.other['official-artwork'].front_default],
+    },
+  };
+}
+```
+
+---
+
+```jsx
 export default async function PokemonDetail({ params }) {
   const { id } = await params;
 
