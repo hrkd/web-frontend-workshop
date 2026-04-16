@@ -70,9 +70,9 @@ export default async function Home() {
 
 ---
 
-### なぜ useState / useEffect が不要になるのか
+### CSR版との違い
 
-CSRではページ表示**後**にデータを取得する必要があった。<br>だから `useState` で状態を管理し、`useEffect` で取得を制御していた。
+CSR版では、「読み込み中...」を先に表示しておいて<br>fetch後に `ReactDOM.createRoot().render()` でReactをマウントする<br>という段取りが必要だった。
 
 SSRではデータ取得が表示**前**に完了する。<br>だから関数の中で直接 `await fetch()` するだけで済む。
 
@@ -86,7 +86,6 @@ SSRではデータ取得が表示**前**に完了する。<br>だから関数の
 | データ取得のタイミング | ページ表示**後** | ページ表示**前** |
 | 「読み込み中...」 | ある | ない |
 | HTMLソースにデータが含まれるか | 含まれない | 含まれる |
-| `useState` / `useEffect` | 必要 | 不要 |
 
 ---
 
@@ -125,7 +124,7 @@ export default async function PokemonDetail({ params }) {
 
 前回、CSRの課題として<br>「機密情報の露出」と「SEOの問題」を挙げました。
 
-SSRがこれらをどう解決するか整理します。
+SSRはこれらに加えて、<br>「リクエスト時に決まる内容」にも対応できます。
 
 ---
 
@@ -167,7 +166,21 @@ export async function generateMetadata({ params }) {
 
 ---
 
-ECサイトの商品ページやブログ記事など、<br>**検索やSNSシェアで見つけてもらいたいページ**には<br>SSRが適している。
+### リクエスト時に決まる内容に対応できる
+
+第四回で学んだSSG（Static Site Generation）を思い出そう。<br>SSGはビルド時に全ページのHTMLを作ってしまう手法。
+
+**事前に全パターンを作れる**ならSSGで十分、<br>SSRを使う必要はない。
+
+---
+
+動的ルーティングの `/pokemon/[id]` も、<br>IDの範囲が固定なら全IDぶんを事前に生成してSSGにできる。<br>（Next.jsの `generateStaticParams`）
+
+---
+
+SSRが本当に活きるのは、<br>**リクエスト時にしか内容が確定しないケース**。
+
+たとえばポケモン図鑑の場合、新作が出るたびにポケモンは増える。<br>SSGだと新作が出るたびにビルドし直す必要があるが、<br>SSRならリクエスト時にPokéAPIから最新データを取得するので、<br>常に最新の内容を返せる。
 
 ---
 
