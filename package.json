@@ -9,6 +9,7 @@
     "dev:05": "reveal-md vol_05/slides.md --watch",
     "dev:06": "reveal-md vol_06/slides.md --watch",
     "dev:07": "reveal-md vol_07/slides.md --watch",
+    "dev:08": "reveal-md vol_08/slides.md --watch",
     "build": "for dir in vol_*/; do [ -f \"${dir}slides.md\" ] && reveal-md ${dir}slides.md --static dist/${dir%/}; [ -d \"${dir}demo\" ] && cp -r ${dir}demo dist/${dir%/}/; done; node scripts/generate-index.js"
   },
   "devDependencies": {
