@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>vol_09 / 01 — Canvas 2D</title>
+  <style>
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      background: #f5f7fa;
+      font-family: system-ui, sans-serif;
+    }
+    .wrap { text-align: center; }
+    canvas {
+      background: #fff;
+      border: 1px solid #ccc;
+      display: block;
+      margin: 1rem auto;
+    }
+    h1 { font-size: 1.1rem; color: #333; }
+    p  { font-size: 0.9rem; color: #666; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>サンプル01：Canvas 2D（CPU描画）</h1>
+    <p>赤い四角と青い円を描画</p>
+    <canvas id="c" width="400" height="300"></canvas>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('c');
+    const ctx = canvas.getContext('2d');
+
+    ctx.fillStyle = 'red';
+    ctx.fillRect(10, 10, 100, 100); // 赤い四角
+
+    ctx.beginPath();
+    ctx.arc(200, 150, 50, 0, Math.PI * 2);
+    ctx.fillStyle = 'blue';
+    ctx.fill(); // 青い円
+  </script>
+</body>
+</html>

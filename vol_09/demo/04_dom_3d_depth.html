@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>vol_09 / 04 — DOM × 3D 奥行き連動</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; }
+    body {
+      background: #0b1020;
+      color: #fff;
+      font-family: system-ui, sans-serif;
+    }
+    #bg {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+    }
+
+    /* DOMを3D空間に配置するためのステージ */
+    .stage {
+      position: fixed;
+      inset: 0;
+      z-index: 1;
+      perspective: 800px;
+      perspective-origin: 50% 50%;
+      pointer-events: none;
+    }
+    .section {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      pointer-events: none;
+    }
+    /* Section 2 のみ CSS transition で動かす */
+    .section-2 {
+      transition: transform 1.6s cubic-bezier(0.65, 0, 0.35, 1),
+                  opacity 1.6s ease;
+    }
+    .card {
+      max-width: 32rem;
+      padding: 2rem 2.5rem;
+      text-align: center;
+      background: rgba(11, 16, 32, 0.4);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 1rem;
+      backdrop-filter: blur(4px);
+    }
+    .card h1 {
+      margin: 0 0 0.75rem;
+      font-size: clamp(2rem, 5vw, 3rem);
+    }
+    .card p {
+      margin: 0;
+      opacity: 0.85;
+      line-height: 1.6;
+    }
+
+    /* Section 1: 初期は viewer 位置（z=0）。JSでtransformを直接更新する */
+    .section-1 { transform: translateZ(0); }
+    /* Section 2: 初期はかなり奥にいて、まだ見えない */
+    .section-2 {
+      transform: translateZ(-4500px);
+      opacity: 0;
+    }
+
+    /* ボタンを押した後の状態（Section 2 のみCSSで遷移） */
+    .stage.advanced .section-2 {
+      transform: translateZ(0); /* 奥から viewer 位置まで近づく */
+      opacity: 1;
+    }
+
+    /* ボタン */
+    .btn {
+      position: fixed;
+      bottom: 2rem;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 10;
+      padding: 0.85rem 1.75rem;
+      background: #00aaff;
+      color: #fff;
+      border: none;
+      border-radius: 999px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      box-shadow: 0 8px 24px rgba(0, 170, 255, 0.4);
+      transition: transform 0.15s, background 0.15s;
+    }
+    .btn:hover { background: #33bbff; transform: translateX(-50%) translateY(-2px); }
+    .btn:active { transform: translateX(-50%) translateY(0); }
+  </style>
+</head>
+<body>
+  <canvas id="bg"></canvas>
+
+  <div class="stage" id="stage">
+    <div class="section section-1">
+      <div class="card">
+        <h1>Section 1</h1>
+        <p>ボタンを押すと、このセクションが Z 方向に手前へ移動して通り抜けます。背景の3Dカメラも同時に前進します。</p>
+      </div>
+    </div>
+    <div class="section section-2">
+      <div class="card">
+        <h1>Section 2</h1>
+        <p>このセクションは初め奥にいて小さく見えていますが、ボタンを押すと viewer 位置まで近づいてきます。</p>
+      </div>
+    </div>
+  </div>
+
+  <button class="btn" id="advance">次のセクションへ →</button>
+
+  <script type="importmap">
+    { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
+  </script>
+  <script type="module">
+    import * as THREE from 'three';
+
+    // ── 3Dシーンのセットアップ ───────────────────────────────
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(
+      60, innerWidth / innerHeight, 0.1, 100
+    );
+    camera.position.z = 5;
+
+    const renderer = new THREE.WebGLRenderer({
+      canvas: document.getElementById('bg'),
+      antialias: true,
+      alpha: true,
+    });
+    renderer.setSize(innerWidth, innerHeight);
+
+    // 奥に広がるキューブ群
+    for (let i = 0; i < 40; i++) {
+      const mesh = new THREE.Mesh(
+        new THREE.BoxGeometry(0.5, 0.5, 0.5),
+        new THREE.MeshStandardMaterial({ color: 0x00aaff })
+      );
+      mesh.position.set(
+        (Math.random() - 0.5) * 8,
+        (Math.random() - 0.5) * 6,
+        -i * 2
+      );
+      scene.add(mesh);
+    }
+    scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+    const dir = new THREE.DirectionalLight(0xffffff, 0.8);
+    dir.position.set(3, 5, 5);
+    scene.add(dir);
+
+    function render() {
+      requestAnimationFrame(render);
+      renderer.render(scene, camera);
+    }
+    render();
+
+    window.addEventListener('resize', () => {
+      camera.aspect = innerWidth / innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(innerWidth, innerHeight);
+    });
+
+    // ── ボタン押下で DOM と 3D カメラを同時に動かす ──────────
+    const stage = document.getElementById('stage');
+    const section1 = document.querySelector('.section-1');
+    const btn = document.getElementById('advance');
+    let advanced = false;
+
+    // CSS perspective と同じ値。translateZ がこの値に近づくと無限大に拡大する
+    const PERSPECTIVE = 800;
+    // この閾値を超えたら Section 1 を非表示にする（near plane を越えた扱い）
+    const HIDE_THRESHOLD = 700;
+    const DURATION = 1600;
+
+    // easeInOutCubic
+    const easeInOutCubic = (t) =>
+      t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+
+    // 汎用アニメーション：onStep に進捗 0→1 と eased を渡す
+    function animate(duration, onStep) {
+      const startTime = performance.now();
+      function step(now) {
+        const t = Math.min(1, (now - startTime) / duration);
+        const eased = easeInOutCubic(t);
+        onStep(t, eased);
+        if (t < 1) requestAnimationFrame(step);
+      }
+      requestAnimationFrame(step);
+    }
+
+    btn.addEventListener('click', () => {
+      advanced = !advanced;
+      stage.classList.toggle('advanced', advanced);
+
+      if (advanced) {
+        // 3D カメラ：5 → -30
+        const startCam = camera.position.z;
+        // Section 1：translateZ 0 → 1200（perspective を越えて視界外へ）
+        const startS1 = 0;
+        const endS1 = 1200;
+
+        section1.style.visibility = 'visible';
+        animate(DURATION, (t, eased) => {
+          camera.position.z = startCam + (-30 - startCam) * eased;
+          const z = startS1 + (endS1 - startS1) * eased;
+          section1.style.transform = `translateZ(${z}px)`;
+          // near plane を越えるくらい大きくなったら非表示にする
+          section1.style.visibility = z >= HIDE_THRESHOLD ? 'hidden' : 'visible';
+        });
+        btn.textContent = '← 戻る';
+      } else {
+        // 戻り：3D カメラを 5 に、Section 1 を translateZ 0 に
+        const startCam = camera.position.z;
+        const startS1 = 1200;
+        const endS1 = 0;
+
+        section1.style.visibility = 'visible';
+        animate(DURATION, (t, eased) => {
+          camera.position.z = startCam + (5 - startCam) * eased;
+          const z = startS1 + (endS1 - startS1) * eased;
+          section1.style.transform = `translateZ(${z}px)`;
+          // 戻ってきて threshold を下回ったら表示
+          section1.style.visibility = z >= HIDE_THRESHOLD ? 'hidden' : 'visible';
+        });
+        btn.textContent = '次のセクションへ →';
+      }
+    });
+  </script>
+</body>
+</html>

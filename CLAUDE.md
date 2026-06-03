@@ -54,13 +54,18 @@
 8. 大規模開発でのテスト戦略
     1. フロントエンドでのテスト
         1. APIモック
-9. 大規模開発での運用
-    1. ライブラリのアップデート
-    2. セキュリティアップデート
-10. Canvas, WebGLを用いたリッチな演出1 ★Canvas, WebGL回
-    1. WebGLについて
-    2. three-jsを用いたリッチ演出
-    3. 課題
-11. Canvas, WebGLを用いたリッチな演出2 ★Canvas, WebGL回
+9. Canvas, WebGLを用いたリッチな演出1 ★Canvas, WebGL回
+    1. WebGLとは何か
+    2. 生のWebGLは大変
+    3. three.jsで学ぶ3DCGの基本概念（シーン／カメラ／ライト／ジオメトリ／マテリアル／描画パイプライン）
+    4. 演出パターン1：DOMと3Dの奥行き連動（DOMのtranslate × 3DカメラのZ移動）
+    5. 演出パターン2：並行投影 × スクロールで鳥瞰ビュー
+    6. 課題
+10. Canvas, WebGLを用いたリッチな演出2 ★Canvas, WebGL回 — シェーダー芸入門
     1. 課題レビュー
-12. AIコーディングの現在と今後の予想
+    2. GLSL（vertex / fragment）の役割
+    3. フラグメントシェーダー単体での絵作り（Shadertoy的な世界）
+    4. 座標・時間・距離関数・ノイズの基本ボキャブラリ
+    5. three.jsのShaderMaterialでカスタムシェーダーを差し込む
+    6. 既存マテリアルの拡張（onBeforeCompile）
+11. AIコーディングの現在と今後の予想
