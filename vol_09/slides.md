@@ -22,16 +22,6 @@ title: 第九回：Canvas、WebGLで「リッチな演出」を作る — three.
 
 ---
 
-```js
-const canvas = document.querySelector('canvas');
-const ctx2d = canvas.getContext('2d');       // 2D 用の道具を取り出す
-const gl   = canvas.getContext('webgl');     // 3D（WebGL）用の道具を取り出す
-```
-
-絵筆のセットを2種類用意していて、どちらを手に取るかで描ける絵の種類が変わる、というイメージです。
-
----
-
 - `getContext('2d')` を選ぶと → **Canvas 2D API**（CPU で2Dの絵を描く）
 - `getContext('webgl')` を選ぶと → **WebGL API**（GPU で3Dや大量の図形を描く）
 
