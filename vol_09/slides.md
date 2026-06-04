@@ -1,12 +1,26 @@
-# Canvas、WebGLで「リッチな演出」を作る — three.js入門
+---
+title: 第九回：Canvas、WebGLで「リッチな演出」を作る — three.js入門
+---
+
+# Canvas、WebGLで「リッチな演出」を作る
+
+— three.js入門
+
+---
 
 ## 1. Canvas と WebGL
 
+---
+
 リッチな演出を作るためにブラウザが用意しているのが、`<canvas>` 要素です。HTML/CSS では難しい、ピクセル単位の自由な描画・大量の図形のリアルタイム更新・3D表現などをカバーするための「お絵かき領域」です。
+
+---
 
 `<canvas>` タグ自体は、画面に **「絵を描いていい四角い領域」** を確保するだけのもので、それ自体は何の絵も描きません。実際に何かを描くには、JavaScript から `canvas.getContext(...)` を呼び出して、**「どんな道具で描くか」** を指定します。
 
 この「道具」のことを **コンテキスト（context）** と呼びます。
+
+---
 
 ```js
 const canvas = document.querySelector('canvas');
@@ -16,12 +30,16 @@ const gl   = canvas.getContext('webgl');     // 3D（WebGL）用の道具を取�
 
 絵筆のセットを2種類用意していて、どちらを手に取るかで描ける絵の種類が変わる、というイメージです。
 
+---
+
 - `getContext('2d')` を選ぶと → **Canvas 2D API**（CPU で2Dの絵を描く）
 - `getContext('webgl')` を選ぶと → **WebGL API**（GPU で3Dや大量の図形を描く）
 
 同じ `<canvas>` タグでも、ここの選び方で **まったく別の世界** に切り替わります。
 
 まずは Canvas 2D から見て、その先に WebGL の世界があることを掴みます。
+
+---
 
 ### Canvas 2D（CPU描画）
 
@@ -30,6 +48,8 @@ const gl   = canvas.getContext('webgl');     // 3D（WebGL）用の道具を取�
 ```html
 <canvas id="c" width="400" height="300"></canvas>
 ```
+
+---
 
 ```js
 const canvas = document.getElementById('c');
@@ -44,6 +64,8 @@ ctx.fillStyle = 'blue';
 ctx.fill(); // 青い円
 ```
 
+---
+
 Canvas 2D は **CPU** が1命令ずつ順番に処理して描画します。
 
 - 図形が数十〜数百個程度なら、これで十分滑らかに動く
@@ -52,6 +74,8 @@ Canvas 2D は **CPU** が1命令ずつ順番に処理して描画します。
 
 つまり Canvas 2D は **「DOMで描けない2Dの絵を、JSで自由に描きたい」** ときの選択肢です。
 
+---
+
 ### WebGL（GPU描画）
 
 Canvas 2D で力不足になる場面があります。
@@ -59,6 +83,8 @@ Canvas 2D で力不足になる場面があります。
 - 数千〜数万個の図形を毎フレーム動かしたい（パーティクル、流体）
 - 3D空間を表現したい
 - 光・影・反射などの質感をリアルタイム計算したい
+
+---
 
 ここで登場するのが **WebGL** です。同じ `<canvas>` タグから、別のコンテキストを取り出します。
 
@@ -69,15 +95,21 @@ const gl = canvas.getContext('webgl'); // または 'webgl2'
 
 WebGL は、ブラウザから **GPU（Graphics Processing Unit）** を直接使うための API です。Canvas 2D が CPU の処理速度の延長線にあるのに対し、WebGL はそもそも別のハードウェア（GPU）に仕事を投げる仕組みなので、扱える表現の規模と複雑さが桁違いになります。
 
+---
+
 ### GPU は「同じ処理を一気に大量にやる」のが得意
 
 CPU は「色々な種類の処理を順番に高速にこなす」のが得意。GPU は「同じ計算を大量の対象に並列で適用する」のが得意です。
 
 3D空間に1万個の頂点があるとき、それぞれを画面座標に変換する処理は **同じ計算を1万回** やることになります。これは GPU の真骨頂です。
 
+---
+
 ### シェーダー：GPU に渡す描画プログラム
 
 GPU に絵を描かせるには、**シェーダー（shader）** という小さなプログラムを書いて GPU に送り込みます。シェーダーは **GLSL（OpenGL Shading Language）** という C 言語風の専用言語で書きます。
+
+---
 
 主に2種類のシェーダーがあります。
 
@@ -86,12 +118,13 @@ GPU に絵を描かせるには、**シェーダー（shader）** という小�
 
 これらが GPU 内で **並列実行** されることで、滑らかなアニメーションや複雑な質感表現が成り立ちます。
 
-
 ---
 
 ## 2. 生の WebGL を書くと大変
 
 ここで、生の WebGL で **赤い三角形を1つ描く** だけのコードを見てみます。
+
+---
 
 ```js
 const canvas = document.getElementById('c');
@@ -112,7 +145,11 @@ const fsSource = `
     gl_FragColor = vec4(1.0, 0.0, 0.0, 1.0); // 赤
   }
 `;
+```
 
+---
+
+```js
 // シェーダーをコンパイル
 const vs = gl.createShader(gl.VERTEX_SHADER);
 gl.shaderSource(vs, vsSource);
@@ -128,7 +165,11 @@ gl.attachShader(program, vs);
 gl.attachShader(program, fs);
 gl.linkProgram(program);
 gl.useProgram(program);
+```
 
+---
+
+```js
 // 頂点データを GPU に送る
 const positions = new Float32Array([
    0.0,  0.5,
@@ -147,6 +188,8 @@ gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
 gl.drawArrays(gl.TRIANGLES, 0, 3);
 ```
 
+---
+
 これで描けるのは **塗りつぶされた三角形1つ**。動きません。色もシェーダーにベタ書きで一色です。
 
 ここから 3Dモデルを読み込み、ライティング、カメラ移動、アニメーションを追加していくと、すぐに数千行のコードになります。WebGL は GPU を「素手で」触る API なので、何をするにも人間側がお膳立てをしないといけません。
@@ -158,6 +201,8 @@ gl.drawArrays(gl.TRIANGLES, 0, 3);
 ## 3. three.js で学ぶ 3DCG の基本概念
 
 three.js を理解する前に、3DCG というジャンルそのものの **基本ボキャブラリ** を押さえます。これは three.js 固有の話ではなく、Unity でも Blender でも Maya でも共通する考え方です。
+
+---
 
 3DCG の描画には、必ず次の登場人物が出てきます。
 
@@ -171,6 +216,8 @@ three.js を理解する前に、3DCG というジャンルそのものの **基
 
 順番に見ていきます。
 
+---
+
 ### シーン（Scene）
 
 3D空間そのもの。すべての物体・光源を入れる「器」です。ここに物体（メッシュ）やライトを add していきます。
@@ -179,9 +226,13 @@ three.js を理解する前に、3DCG というジャンルそのものの **基
 const scene = new THREE.Scene();
 ```
 
+---
+
 ### カメラ（Camera）
 
 「どこから・どんな画角で見るか」を決める存在です。three.js には主に2種類あります。
+
+---
 
 #### PerspectiveCamera（透視投影カメラ）
 
@@ -197,6 +248,8 @@ const camera = new THREE.PerspectiveCamera(
 camera.position.z = 3;
 ```
 
+---
+
 #### OrthographicCamera（並行投影カメラ）
 
 遠近感のないカメラ。遠くも近くも同じ大きさで描画されます。建築の平面図、ゲームでのアイソメトリックビュー（斜め見下ろし）、UIの背景演出などに使います。
@@ -211,9 +264,13 @@ const camera = new THREE.OrthographicCamera(
 
 この2つの違いは、後半の演出パターンで実際に使い分けます。
 
+---
+
 ### ライト（Light）
 
 3D空間に置いただけでは、ほとんどの物体は **真っ黒** です。光が当たって初めて見える、というのが3DCGの世界の前提です（ライトを必要としないマテリアルもあります）。
+
+---
 
 代表的なライト：
 
@@ -229,6 +286,8 @@ sun.position.set(2, 2, 2);
 scene.add(sun);
 ```
 
+---
+
 ### ジオメトリ（Geometry）
 
 「形」のデータ。頂点（vertex）の集まりです。three.js には主要な形状がプリセットで用意されています。
@@ -241,6 +300,8 @@ new THREE.TorusGeometry(1, 0.4, 16, 100);// ドーナツ
 ```
 
 自前のモデルを使いたいときは、Blender などで作った `.gltf` ファイルを読み込んで Geometry として扱います。
+
+---
 
 ### マテリアル（Material）
 
@@ -261,6 +322,8 @@ new THREE.MeshStandardMaterial({
 new THREE.ShaderMaterial({ vertexShader, fragmentShader });
 ```
 
+---
+
 ### メッシュ（Mesh）：ジオメトリ + マテリアル
 
 ジオメトリ（形）とマテリアル（見た目）を組み合わせると、シーンに置ける物体 = **メッシュ** になります。
@@ -272,6 +335,8 @@ const cube = new THREE.Mesh(geometry, material);
 scene.add(cube);
 ```
 
+---
+
 ### レンダラー（Renderer）と描画パイプライン
 
 ここまでで「シーン」「メッシュ」「カメラ」「ライト」が揃いました。最後に **レンダラー** が、これらを毎フレーム計算して `<canvas>` に絵を描き出します。
@@ -280,6 +345,8 @@ scene.add(cube);
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
 ```
+
+---
 
 毎フレーム動かしたいときは、`requestAnimationFrame` でループします。
 
@@ -291,6 +358,8 @@ function animate() {
 }
 animate();
 ```
+
+---
 
 #### 描画パイプラインの全体像
 
@@ -305,9 +374,13 @@ animate();
 
 three.js は、このパイプラインを宣言的に組み立てられるよう抽象化してくれているわけです。
 
+---
+
 ### 最小コード：回転する立方体
 
 ここまでの登場人物を全部使った最小のサンプルです。
+
+---
 
 ```html
 <canvas id="c"></canvas>
@@ -328,7 +401,11 @@ three.js は、このパイプラインを宣言的に組み立てられるよ�
     antialias: true,
   });
   renderer.setSize(window.innerWidth, window.innerHeight);
+```
 
+---
+
+```js
   const cube = new THREE.Mesh(
     new THREE.BoxGeometry(1, 1, 1),
     new THREE.MeshStandardMaterial({ color: 0x00aaff })
@@ -350,14 +427,17 @@ three.js は、このパイプラインを宣言的に組み立てられるよ�
 </script>
 ```
 
+---
+
 これで3D空間でくるくる回る青い立方体が描けます。生 WebGL で「赤い三角形1つ」だったコード量と比べると、扱える表現の幅が一気に広がっていることが分かります。
 
 ---
 
 ## 4. 演出パターン1：DOMと3Dの奥行き連動
 
-
 最初のパターンは、**DOM要素の Z方向移動（CSS perspective）と、3Dカメラの z軸移動を同時に走らせて、シーン全体が奥行き方向に流れる演出** を作るやり方です。
+
+---
 
 ### 何を作るのか
 
@@ -370,6 +450,8 @@ three.js は、このパイプラインを宣言的に組み立てられるよ�
 - すべて同じ duration（1.6秒）で進むので、**DOM の奥行き感と背景3Dの奥行き感がぴったり一致** する
 
 スクロールではなく、明示的なボタンで遷移するため、プロダクトの「次のページへ」「次のステップへ」といった文脈で使える表現です。
+
+---
 
 ### なぜ DOM と 3D を分けるのか
 
@@ -384,9 +466,13 @@ three.js は、このパイプラインを宣言的に組み立てられるよ�
 
 **「読ませたいテキストは DOM、空間表現は WebGL」** と棲み分けて、両者を同期させるのが現実的な落としどころです。
 
+---
+
 ### 仕組み（HTML / CSS）
 
 `<canvas>` を背面に固定し、その上に CSS `perspective` を持つステージを置いて、Section 1 / Section 2 を重ねます。
+
+---
 
 ```html
 <style>
@@ -407,6 +493,11 @@ three.js は、このパイプラインを宣言的に組み立てられるよ�
     display: grid;
     place-items: center;
   }
+```
+
+---
+
+```html
   /* Section 2 のみ CSS transition で動かす（Section 1 は JS駆動） */
   .section-2 {
     transition: transform 1.6s cubic-bezier(0.65, 0, 0.35, 1),
@@ -432,17 +523,29 @@ three.js は、このパイプラインを宣言的に組み立てられるよ�
 <button id="advance">次のセクションへ →</button>
 ```
 
+---
+
 #### `perspective` と `perspective-origin` の意味
 
 DOM要素に CSS で奥行きを持たせるには、**親要素に `perspective` を指定する** のがポイントです。これがないと、子要素に `translateZ` を書いても「ただの2D要素」として扱われてしまい、奥行き感が出ません。
 
-- **`perspective: 800px`** — 「viewer（画面を見ている人）が画面から 800px 手前にいる」と仮定して、3D空間を計算する。数字が **小さいほど遠近感が強く**（魚眼レンズ風）、**大きいほど穏やか**（望遠レンズ風）に見えます。
+---
 
-| 値        | 見え方                       |
-| -------- | ------------------------- |
-| `200px`  | 強烈に遠近感が出る（手前に来た要素が爆発的に拡大） |
-| `800px`  | ほどよい奥行き感（今回の選択）           |
-| `2000px` | 遠近感が弱く、ほぼ正射影に近い           |
+**`perspective: 800px`** — 「viewer（画面を見ている人）が画面から 800px 手前にいる」と仮定して、3D空間を計算する。
+
+数字が **小さいほど遠近感が強く**（魚眼レンズ風）、**大きいほど穏やか**（望遠レンズ風）に見えます。
+
+---
+
+#### `perspective` の値による見え方の違い
+
+| 値 | 見え方 |
+|---|---|
+| `200px` | 強烈に遠近感が出る（手前に来た要素が爆発的に拡大） |
+| `800px` | ほどよい奥行き感（今回の選択） |
+| `2000px` | 遠近感が弱く、ほぼ正射影に近い |
+
+---
 
 また、`translateZ` の値がこの perspective に近づくほど要素は viewer に近づき、**`translateZ(800px)` で viewer の位置（消失点）に到達** します。これを越えると拡大率が無限大になるため、サンプル4で `translateZ(800px)` 付近で `visibility: hidden` にしているのはこれが理由です。
 
@@ -450,10 +553,13 @@ DOM要素に CSS で奥行きを持たせるには、**親要素に `perspective
 
 つまりこの2行で、「`.stage` 要素を、画面から 800px 手前の中央に立つ viewer から覗き込む 3D 空間として扱う」という宣言をしているわけです。
 
+---
 
 ### 仕組み（JavaScript）
 
 Section 2 と 3Dカメラはシンプルなアニメーションで済みますが、Section 1 だけは **near plane（`perspective` と同じ値）を越えたら非表示にする** ロジックが必要なので、JS でフレーム単位に制御します。
+
+---
 
 ```js
 import * as THREE from 'three';
@@ -468,7 +574,11 @@ const renderer = new THREE.WebGLRenderer({
   alpha: true,
 });
 renderer.setSize(innerWidth, innerHeight);
+```
 
+---
+
+```js
 // 奥に広がるキューブ群
 for (let i = 0; i < 40; i++) {
   const mesh = new THREE.Mesh(
@@ -491,7 +601,11 @@ scene.add(dir);
   requestAnimationFrame(loop);
   renderer.render(scene, camera);
 })();
+```
 
+---
+
+```js
 // ── ボタンで DOM と 3D カメラを同時に動かす ──
 const stage = document.getElementById('stage');
 const section1 = document.querySelector('.section-1');
@@ -514,7 +628,11 @@ function animate(duration, onStep) {
   }
   requestAnimationFrame(step);
 }
+```
 
+---
+
+```js
 btn.addEventListener('click', () => {
   advanced = !advanced;
   stage.classList.toggle('advanced', advanced);
@@ -537,6 +655,8 @@ btn.addEventListener('click', () => {
 });
 ```
 
+---
+
 ### 学べるポイント
 
 - **CSS `perspective` を使うと、DOM要素も擬似的に3D空間に置ける**（`translateZ` で奥行きを表現できる）
@@ -550,6 +670,8 @@ btn.addEventListener('click', () => {
 
 2つめは、`OrthographicCamera`（並行投影カメラ）を使って、**マップを上から俯瞰するような表現** を作る例です。
 
+---
+
 ### 何を作るのか
 
 - 並行投影カメラで街（建物群）を斜め上から見下ろす
@@ -557,15 +679,21 @@ btn.addEventListener('click', () => {
 - 一定間隔で配置された建物が、画面の **右上から左下に向かって流れる** ように見える
 - DOM 側は中身を持たない高さだけの `<div>`。**スクロール量を稼ぐためだけのスペーサ** として置く
 
+---
+
 ### なぜ並行投影なのか
 
 `PerspectiveCamera`（透視投影）でこれをやると、遠くの建物が小さくなって「奥行きはあるけどマップらしくない」見え方になります。並行投影だと **遠近によらず同じスケール** で描画されるため、ファミコン時代の RPG のような、設計図的な見え方になります。
 
 ビジネス資料の見出しビジュアル、UI 背景、インフォグラフィックなどに向く描画方法です。
 
+---
+
 ### スクロールに「直接」追従する
 
 パターン1ではボタン押下時にイージングを入れていましたが、こちらは **スクロール位置をそのままカメラ位置に反映** します。スクロールの量と街の進行が1対1で対応するので、ユーザーが「自分でカメラを動かしている」感覚になります。
+
+---
 
 ### 仕組み（HTML）
 
@@ -582,6 +710,8 @@ DOM 側は本当に空でよく、スクロール領域を確保するための�
 <canvas id="bg"></canvas>
 <div class="spacer"></div>
 ```
+
+---
 
 ### 仕組み（JavaScript）
 
@@ -606,7 +736,11 @@ const camera = new THREE.OrthographicCamera(
 // 斜め上から見下ろす位置に置く（x を負側にすると、建物が右上→左下に流れる）
 camera.position.set(-20, 20, 20);
 camera.lookAt(0, 0, 0);
+```
 
+---
+
+```js
 // 地面（真っ白）
 const ground = new THREE.Mesh(
   new THREE.PlaneGeometry(400, 200),
@@ -626,7 +760,11 @@ for (let i = 0; i < 60; i++) {
   building.position.set(i * 3 - 30, h / 2, (i % 2) * 2);
   scene.add(building);
 }
+```
 
+---
+
+```js
 // 全体を明るく＋立体感のため複数方向からライティング
 scene.add(new THREE.AmbientLight(0xffffff, 1.4));
 const sun = new THREE.DirectionalLight(0xffffff, 1.2);
@@ -651,6 +789,7 @@ updateCamera();
 })();
 ```
 
+---
 
 ### 学べるポイント
 
@@ -658,10 +797,11 @@ updateCamera();
 - カメラを動かすだけで「世界を進む」表現が作れる
 - DOM は中身を持たない **スペーサ** として、スクロール量を稼ぐためだけに使うパターン
 
-
 ---
 
 ## 6. 課題
+
+---
 
 ### 課題1：基本概念を入れ替えて遊ぶ
 
@@ -672,15 +812,22 @@ updateCamera();
 - ライトを `PointLight` に変えて、位置を動かしてみる
 - カメラを `OrthographicCamera` に切り替えて、見た目がどう変わるか確認する
 
+---
+
 ### 課題2：演出パターン2を再現する
 
 5章の「鳥瞰ビュー」のコードをローカルで動かす。建物の配置・色・高さを変えたり、カメラの移動方向を変えたりして、自分の世界観を作ってみる。
+
+---
 
 さらに余裕があれば、**フリーで配布されている3Dモデルファイル（.glb / .gltf）を読み込んで、街の中に置いてみる** ことにも挑戦してみてください。プリミティブな BoxGeometry の代わりに、ちゃんとした建物・キャラクター・小物のモデルが並ぶと一気に世界観が広がります。
 
 - 入手先の例:
     - [Poly Pizza](https://poly.pizza/)（低ポリの 3Dアセット。CC0 / CC-BY が多い）
     - [Kenney Assets](https://kenney.nl/assets)（CC0 のゲームアセット）
+
+---
+
 - 読み込みには three.js の `GLTFLoader` を使います:
 
 ```js
@@ -696,7 +843,6 @@ loader.load('./models/building.glb', (gltf) => {
 
 - ファイルは `vol_09/demo/models/` などに置き、相対パスで参照。
 
-
 ---
 
 ## 7. まとめ
@@ -705,10 +851,15 @@ loader.load('./models/building.glb', (gltf) => {
 - **生の WebGL は低レベル** で、簡単な絵を描くにも大量のコードが必要
 - **three.js** は WebGL を扱いやすくラップしたデファクトライブラリ
 - 3DCG の基本登場人物：**シーン／カメラ／ライト／ジオメトリ／マテリアル／メッシュ／レンダラー**
+
+---
+
 - カメラには **PerspectiveCamera（透視投影）** と **OrthographicCamera（並行投影）** があり、世界観を決定づける
 - 描画パイプラインは「頂点シェーダー → ラスタライズ → フラグメントシェーダー → 深度テスト → 出力」
 - 演出として **DOM と 3D を組み合わせる** のが実用的な設計：DOMは情報、3Dは空間表現
 - **パターン1**：透視投影 × カメラのZ移動で奥行き演出
 - **パターン2**：並行投影 × カメラの平面移動で鳥瞰ビュー
+
+---
 
 次回は、ここで触れた **マテリアル** と **シェーダー** をさらに掘り下げ、GLSL を直接書いて「ピクセル単位で絵を作る」シェーダー芸の世界に入ります。
