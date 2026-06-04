@@ -39,8 +39,6 @@ title: 第九回：Canvas、WebGLで「リッチな演出」を作る — three.
 <canvas id="c" width="400" height="300"></canvas>
 ```
 
----
-
 ```js
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
