@@ -211,37 +211,104 @@ vol_09 で作った **鳥瞰ビューの街** に、画面端ほど強くなる 
 
 ### 付録1. vertex shader と fragment shader
 
-GPU で描画される 1 枚の絵は、必ず2種類のシェーダーを通ります。
+GPU で描画される 1 枚の絵は、必ず2種類のシェーダーを順番に通ります。
 
-- **vertex shader（バーテックスシェーダー／頂点シェーダー）**
-    - 頂点1個ずつに対して走る
-    - 「この頂点を画面上のどこに置くか」を決める
-    - 出力：`gl_Position`
-- **fragment shader（フラグメントシェーダー／断片シェーダー）**
-    - 画面のピクセル1個ずつに対して走る
-    - 「このピクセルを何色にするか」を決める
-    - 出力：`gl_FragColor`
+#### 全体の流れ
 
-頂点が10万個あれば vertex shader は10万回、画面が 1920×1080 なら fragment shader は約207万回、**それぞれ完全に並列で** 走ります。
+```
+[ JS ]
+   │ attribute（アトリビュート）   頂点ごとに違うデータ（後述）
+   │ uniform（ユニフォーム）        全頂点・全ピクセルで共通のデータ（後述）
+   ↓
+[ vertex shader ]      頂点1個ずつに走る。出力は gl_Position（=画面上の頂点位置）
+   │ varying（バリイング）          vertex → fragment へバケツリレー（後述）
+   ↓
+[ ラスタライズ（rasterize） ]    頂点でできた三角形を、それが覆う画面ピクセルに分解。
+                                 各ピクセル位置に対する varying は、3頂点の値の補間として作られる
+   ↓
+[ fragment shader ]    ピクセル1個ずつに走る。出力は gl_FragColor（=そのピクセルの色）
+   ↓
+[ 画面 ]
+```
+
+頂点が10万個あれば **vertex shader（バーテックスシェーダー／頂点シェーダー）** は10万回、画面が 1920×1080 なら **fragment shader（フラグメントシェーダー／断片シェーダー）** は約207万回、**それぞれ完全に並列で** 走ります。
+
+#### vertex shader は何を計算するか
+
+入力された頂点座標 `position`（3D 空間上の点）を、**画面上のどこに置くか** の座標に変換します。出力先は組み込み変数 **`gl_Position`（ジーエル・ポジション）**。
+
+three.js は、変換に必要なカメラ行列を `uniform` として自動で渡してくれているので、最小の vertex shader は次の1行で済みます：
+
+```glsl
+gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+```
+
+- `position`：頂点の3D 座標（`attribute`、頂点ごとに違う）
+- `modelViewMatrix`（モデルビューマトリックス） / `projectionMatrix`（プロジェクションマトリックス）：「物体の置き場所 + カメラ視点 + 投影」を表す行列（`uniform`、全頂点で共通）
+
+この行列を掛け算するだけで、3D の点が **クリップ空間（clip space／クリップスペース）**（画面のどこに映るかが −1〜1 で表される世界）の座標になります。
+
+#### fragment shader は何を計算するか
+
+ラスタライズで「このピクセルはこの三角形の中だよ」と分かったあと、その **ピクセルの色** を組み込み変数 **`gl_FragColor`（ジーエル・フラグカラー）** に出力します。
+
+```glsl
+gl_FragColor = vec4(R, G, B, A);  // R, G, B, A は 0.0〜1.0
+```
+
+vertex shader から `varying` で値を受け取れる場合は、それを使って計算します（後述）。
+
+#### attribute / uniform / varying：どんな値か
+
+| 種類          | 出どころ        | 例                                                                            |
+| ----------- | ----------- | ---------------------------------------------------------------------------- |
+| `attribute` | JS → vertex のみ | `position`（頂点座標 vec3）、`normal`（法線 vec3）、`uv`（UV 座標 vec2）         |
+| `uniform`   | JS → 両方        | `u_time`（時間 float）、`u_resolution`（解像度 vec2）、`modelViewMatrix`（mat4）、`projectionMatrix`（mat4）、ライト方向、ライト色 |
+| `varying`   | vertex → fragment | UV 座標、頂点で計算した色、頂点で計算した「波の高さ」など、各頂点で違う値を fragment 側に届けるのに使う |
+
+#### 「varying は補間される」とはどういうことか
+
+vertex shader は **頂点ごと** にしか走らないので、頂点と頂点の間にあるピクセルには直接値を入れられません。そこで、3頂点で `varying` に入れた値を、**ピクセル位置に応じて自動で線形補間** したものを fragment shader が受け取る、という仕組みになっています。
+
+例：頂点 A で「赤」、頂点 B で「青」、頂点 C で「緑」を `varying` に入れたら、その三角形の内部は赤・青・緑が滑らかに混ざったグラデーションになる ─ これが varying の補間。UV 座標を `varying vec2 vUv` で渡せば、ピクセルごとに「テクスチャ画像のどこを参照すべきか」が補間で勝手に決まる、という形で使われます。
+
+#### 最小の例
+
+```glsl
+// --- vertex shader ---
+varying vec2 vUv;                                                  // fragment に渡す箱
+void main() {
+  vUv = uv;                                                         // attribute → varying に詰める
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+}
+
+// --- fragment shader ---
+varying vec2 vUv;                                                  // vertex 側と同じ宣言
+void main() {
+  gl_FragColor = vec4(vUv.x, vUv.y, 0.5, 1.0);                     // u, v をそのまま R, G に
+}
+```
+
+これだけで、メッシュ表面が **左下=黒、右上=黄色** に滑らかにグラデーションする絵が出ます。`vUv` が頂点間で補間されているので、コードは2行ずつなのに、ピクセル単位の滑らかな色変化が手に入る、というのが GPU 描画の効きどころです。
 
 ### 付録2. attribute / uniform / varying
 
 シェーダーが受け取れる値は、出どころによって3種類に分かれます。
 
-| 種類          | 読み方       | どこから来る               | 例                                   |
-| ----------- | --------- | -------------------- | ----------------------------------- |
-| `attribute` | アトリビュート   | 頂点ごとに違うデータ           | 頂点座標 `position`、法線 `normal`、UV `uv` |
-| `uniform`   | ユニフォーム    | JS から、全頂点・全ピクセルで共通の値 | 時間 `u_time`、解像度 `u_resolution`、行列   |
-| `varying`   | バリイング     | vertex → fragment へ送る | UV 座標、頂点色など                         |
+| 種類          | 読み方     | どこから来る                | 例                                   |
+| ----------- | ------- | --------------------- | ----------------------------------- |
+| `attribute` | アトリビュート | 頂点ごとに違うデータ            | 頂点座標 `position`、法線 `normal`、UV `uv` |
+| `uniform`   | ユニフォーム  | JS から、全頂点・全ピクセルで共通の値  | 時間 `u_time`、解像度 `u_resolution`、行列   |
+| `varying`   | バリイング   | vertex → fragment へ送る | UV 座標、頂点色など                         |
 
 「`attribute` は頂点ごと」「`uniform` は全部共通」「`varying` は vertex から fragment へのバケツリレー」と覚えておけば十分です。
 
 ### 付録3. three.js が裏で渡してくれているもの
 
-three.js の `ShaderMaterial` を使うと、毎回書く定型の `uniform` や `attribute` は自動で挿入されます。
+three.js の **`ShaderMaterial`（シェーダーマテリアル）** を使うと、毎回書く定型の `uniform`（ユニフォーム）や `attribute`（アトリビュート）は自動で挿入されます。
 
-- `position` / `normal` / `uv` はすでに `attribute` として宣言済み
-- `modelMatrix` / `viewMatrix` / `projectionMatrix` などカメラ系の `uniform` も宣言済み
+- `position`（頂点座標） / `normal`（法線） / `uv`（UV 座標）はすでに `attribute` として宣言済み
+- `modelMatrix`（モデルマトリックス） / `viewMatrix`（ビューマトリックス） / `projectionMatrix`（プロジェクションマトリックス）などカメラ系の `uniform` も宣言済み
 
 ### 付録4. UV 座標（ユーブイざひょう）
 
@@ -250,6 +317,6 @@ three.js の `ShaderMaterial` を使うと、毎回書く定型の `uniform` や
 - 範囲は **0.0〜1.0**（左下 = `(0, 0)`、右上 = `(1, 1)`、中央 = `(0.5, 0.5)`）
 - 物体の各頂点が「テクスチャのどの場所に対応するか」を `(u, v)` の値として持つ
 - fragment shader 側では、ピクセルごとに **頂点間で補間された `uv`** が降ってくる
-- 板1枚を全画面に貼って絵を作るときは、`gl_FragCoord` を解像度で割って **自前で uv を作る** こともある（パターン4で使う方式）
+- 板1枚を全画面に貼って絵を作るときは、**`gl_FragCoord`（ジーエル・フラグコード／ピクセル単位の絶対座標）** を解像度で割って **自前で uv を作る** こともある（パターン4で使う方式）
 
-使い道：① `texture2D(tex, vUv)` で画像から色を取る、② uv を数式に入れて絵を計算で作る。
+使い道：① **`texture2D(tex, vUv)`（テクスチャ・ツーディー）** で画像から色を取る、② `uv` を数式に入れて絵を計算で作る。

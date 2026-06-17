@@ -111,27 +111,44 @@
       metalness: 0.1,
     });
 
-    // 既存マテリアルに頂点シェーダーを差し込み（ライト・影はそのまま使える）
-    material.onBeforeCompile = (shader) => {
-      shader.uniforms.u_time = { value: 0 };
-      shader.uniforms.u_amplitude = { value: 0.5 };
-      shader.vertexShader = `
-        uniform float u_time;
-        uniform float u_amplitude;
-        ${WAVE_GLSL}
-        ${shader.vertexShader}
-      `.replace(
-        '#include <begin_vertex>',
-        `
-        vec3 transformed = position;
-        transformed += normal * wave(position, u_time) * u_amplitude;
-        `
-      );
-      material.userData.shader = shader;
-    };
+    // 同じ wave 式を差し込む共通の onBeforeCompile（本体・ワイヤーフレーム両方で再利用）
+    function patchDistort(mat) {
+      mat.onBeforeCompile = (shader) => {
+        shader.uniforms.u_time = { value: 0 };
+        shader.uniforms.u_amplitude = { value: 0.5 };
+        shader.vertexShader = `
+          uniform float u_time;
+          uniform float u_amplitude;
+          ${WAVE_GLSL}
+          ${shader.vertexShader}
+        `.replace(
+          '#include <begin_vertex>',
+          `
+          vec3 transformed = position;
+          transformed += normal * wave(position, u_time) * u_amplitude;
+          `
+        );
+        mat.userData.shader = shader;
+      };
+    }
 
+    // 本体（ライト・影を効かせる）
+    patchDistort(material);
     const mesh = new THREE.Mesh(geometry, material);
     scene.add(mesh);
+
+    // ワイヤーフレーム（同じ歪みを適用して上から薄く重ねる）
+    const wireMaterial = new THREE.MeshBasicMaterial({
+      color: 0xffffff,
+      wireframe: true,
+      transparent: true,
+      opacity: 0.25,
+    });
+    patchDistort(wireMaterial);
+    // z-fighting を避けるため、ほんの少しだけスケールを大きく
+    const wireMesh = new THREE.Mesh(geometry, wireMaterial);
+    wireMesh.scale.setScalar(1.001);
+    scene.add(wireMesh);
 
     scene.add(new THREE.AmbientLight(0xffffff, 0.4));
     const dir = new THREE.DirectionalLight(0xffffff, 1.0);
@@ -146,6 +163,9 @@
       ampVal.textContent = v.toFixed(2);
       if (material.userData.shader) {
         material.userData.shader.uniforms.u_amplitude.value = v;
+      }
+      if (wireMaterial.userData.shader) {
+        wireMaterial.userData.shader.uniforms.u_amplitude.value = v;
       }
       overlayMaterial.uniforms.u_amplitude.value = v;
     });
@@ -198,6 +218,9 @@
       const t = clock.getElapsedTime();
       if (material.userData.shader) {
         material.userData.shader.uniforms.u_time.value = t;
+      }
+      if (wireMaterial.userData.shader) {
+        wireMaterial.userData.shader.uniforms.u_time.value = t;
       }
       overlayMaterial.uniforms.u_time.value = t;
       renderer.render(scene, camera);
