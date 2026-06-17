@@ -73,6 +73,15 @@
     import * as THREE from 'three';
 
     // ─── 共通の GLSL（本体と各可視化で共有） ───
+    // 4ステップの構成：
+    //   ステップ1：CENTERS_GLSL   4つの中心が時間で動く          → center trails
+    //   ステップ2：SDF_GLSL       中心から「場（SDF）」を合成     → SDF (z=0)
+    //   ステップ3：RAYMARCH_GLSL  視線レイで場をなぞって表面発見  → depth
+    //   ステップ4：NORMAL_GLSL    場の勾配で法線→ライティング     → diffuse
+    // 各 GLSL を JS の文字列として持ち、本体と4パネルすべての fragment shader に注入する。
+
+    // ステップ1：4つの中心の位置を、時間 t だけから決定するステートレスな関数。
+    // 違う周波数・位相の sin/cos でリサージュ的に動かす → center trails パネルに対応。
     const CENTERS_GLSL = /* glsl */`
       void centers(float t, out vec3 c1, out vec3 c2, out vec3 c3, out vec3 c4) {
         c1 = vec3(0.7 * cos(t * 0.7),       0.7 * sin(t * 0.9),       0.3 * sin(t * 0.5));
@@ -82,14 +91,25 @@
       }
     `;
 
+    // ステップ2：4中心から「場（SDF）」を合成する。
+    // SDF = ある点から物体表面までの最短距離を返すスカラー関数。
+    // 場のゼロ等値面が「膜（=表面）」になるが、膜そのものは明示的に作らない。
+    // → SDF (z=0) パネルに対応。
     const SDF_GLSL = /* glsl */`
+      // smooth minimum（滑らかな最小値）。k は「糊しろの広さ／粘度」。
+      // k=0 ならハードな min（球同士が独立）、k 大なら離れていてもぬるっと繋がる。
       float smin(float a, float b, float k) {
-        // k=0 だとハードな min と等価
         if (k < 0.0001) return min(a, b);
         float h = clamp(0.5 + 0.5 * (b - a) / k, 0.0, 1.0);
         return mix(b, a, h) - k * h * (1.0 - h);
       }
+
+      // 1個の球の SDF：中心 c までの距離から半径 r を引いた値。
+      //   内側 < 0 < 外側、絶対値 = 表面までの最短距離。
       float sdSphere(vec3 p, vec3 c, float r) { return length(p - c) - r; }
+
+      // 4つの球を smin で1つの場に合成する（k 値を引数で受け取る版）。
+      // 「最も近い表面までの距離」を返すが、smin で近い距離同士をブレンドして滑らかに繋ぐ。
       float sceneK(vec3 p, float t, float k) {
         vec3 c1, c2, c3, c4; centers(t, c1, c2, c3, c4);
         float d = sdSphere(p, c1, 0.45);
@@ -98,43 +118,64 @@
         d = smin(d, sdSphere(p, c4, 0.45), k);
         return d;
       }
+
+      // 本体・各パネルが使う場（k=0.5 で固定）。場を変えたければここをいじる。
       float scene(vec3 p, float t) { return sceneK(p, t, 0.5); }
     `;
 
+    // ステップ4の前段：ヒット位置で「法線」を求める。
+    // 法線 = SDF（スカラーの場）の勾配（=どの方向に場の値が小さくなるか）。
+    // 場の合成式（smin の入れ子）が複雑なので、解析的に微分はせず数値微分で近似する。
+    // 教科書的には各軸 +/- の6点でサンプル（中央差分）するが、
+    // ここでは Inigo Quilez 由来の「tetrahedron technique」を使う。
+    // 正四面体の4頂点に対応する4方向にだけサンプル → scene() の呼び出しを 6→4 回に削減。
     const NORMAL_GLSL = /* glsl */`
       vec3 calcNormal(vec3 p, float t) {
-        float e = 0.001;
-        vec2 k = vec2(1.0, -1.0);
+        float e = 0.001;            // ずらす微小量（ε）
+        vec2 k = vec2(1.0, -1.0);   // 正四面体の4頂点を組み立てる素材
+        // 各行 = 「(方向ベクトル) * その方向の SDF 値」を足し合わせる。
+        // 4方向の重み付き合成が、そのまま勾配ベクトル（=法線）になる。
         return normalize(
-          k.xyy * scene(p + k.xyy * e, t) +
-          k.yyx * scene(p + k.yyx * e, t) +
-          k.yxy * scene(p + k.yxy * e, t) +
-          k.xxx * scene(p + k.xxx * e, t)
+          k.xyy * scene(p + k.xyy * e, t) +  // 方向 ( 1, -1, -1)
+          k.yyx * scene(p + k.yyx * e, t) +  // 方向 (-1, -1,  1)
+          k.yxy * scene(p + k.yxy * e, t) +  // 方向 (-1,  1, -1)
+          k.xxx * scene(p + k.xxx * e, t)    // 方向 ( 1,  1,  1)
         );
       }
     `;
 
+    // ステップ3：視線レイで場をなぞって表面を見つける = レイマーチング。
+    // ro = ray origin（カメラ位置）、rd = ray direction（視線方向、長さ1）。
+    // 「SDF を信じて、その距離ぶんジャンプする」を繰り返すだけのループ。
+    // → depth パネルに対応（ヒット位置までの距離 t を可視化）。
     const RAYMARCH_GLSL = /* glsl */`
+      // ループの結果を1つにまとめる返却型。
+      //   t     : ヒットまでの累計距離（ro からの距離）
+      //   steps : 何回ループを回ったか（コスト指標。色付けには不使用）
+      //   hit   : 物体に当たったか／諦めたか
       struct March { float t; int steps; bool hit; };
+
       March raymarch(vec3 ro, vec3 rd, float u_time) {
         float t = 0.0; int steps = 0; bool hit = false;
-        for (int i = 0; i < 80; i++) {
-          vec3 p = ro + rd * t;
-          float d = scene(p, u_time);
+        for (int i = 0; i < 80; i++) {       // 最大 80 ステップまで
+          vec3 p = ro + rd * t;              // いまレイがいる位置
+          float d = scene(p, u_time);        // p における場の値 = 表面までの最短距離
           steps = i;
-          if (d < 0.001) { hit = true; break; }
-          if (t > 10.0) break;
-          t += d;
+          if (d < 0.001) { hit = true; break; }  // 十分近づいたらヒット確定
+          if (t > 10.0) break;                   // 箱庭の外まで進んだら諦める
+          t += d;                                // 安全な距離ぶんだけ前進（=マーチ）
         }
         return March(t, steps, hit);
       }
     `;
 
+    // 板1枚（PlaneGeometry(2,2)）をそのままクリップ空間に流す vertex shader。
+    // 「画面いっぱいに広げる」だけで、絵作りは fragment shader が全部やる。
     const FULLSCREEN_VS = /* glsl */`
       void main() { gl_Position = vec4(position, 1.0); }
     `;
 
-    // ─── 本体描画（最終出力は法線 RGB） ───
+    // ─── 本体描画：4ステップを直列に走らせて、ヒット位置の diffuse を最終出力にする ───
     const renderer = new THREE.WebGLRenderer({
       canvas: document.getElementById('c'),
       antialias: true,
@@ -146,29 +187,35 @@
 
     const mainMaterial = new THREE.ShaderMaterial({
       uniforms: {
-        u_time: { value: 0 },
-        u_resolution: { value: new THREE.Vector2(innerWidth, innerHeight) },
+        u_time: { value: 0 },                                              // 時間（JS から毎フレーム送る）
+        u_resolution: { value: new THREE.Vector2(innerWidth, innerHeight) }, // 解像度（アスペクト比補正用）
       },
       vertexShader: FULLSCREEN_VS,
       fragmentShader: /* glsl */`
         precision highp float;
         uniform vec2 u_resolution;
         uniform float u_time;
+        // 4ステップの GLSL を順番に注入
         ${CENTERS_GLSL}
         ${SDF_GLSL}
         ${NORMAL_GLSL}
         ${RAYMARCH_GLSL}
         void main() {
+          // 画面中央が原点、縦が -0.5〜0.5。アスペクト比はピクセル位置の uv で補正する。
           vec2 uv = (gl_FragCoord.xy - u_resolution.xy * 0.5) / u_resolution.y;
+          // カメラ位置（ro）と、このピクセルが見る方向（rd）。透視投影風の発散方向。
           vec3 ro = vec3(0.0, 0.0, 3.0);
           vec3 rd = normalize(vec3(uv, -1.5));
+
+          // ステップ3：マーチング実行。ループの中で SDF を聞いてジャンプを繰り返す。
           March m = raymarch(ro, rd, u_time);
-          vec3 col = vec3(0.0);
+
+          vec3 col = vec3(0.0);  // 何にも当たらなかったピクセルは黒のまま
           if (m.hit) {
-            vec3 p = ro + rd * m.t;
-            vec3 n = calcNormal(p, u_time);
-            vec3 lightDir = normalize(vec3(0.6, 0.8, 0.5));
-            float diff = max(dot(n, lightDir), 0.0);
+            vec3 p = ro + rd * m.t;                              // ヒット位置
+            vec3 n = calcNormal(p, u_time);                      // ステップ4の前段：法線
+            vec3 lightDir = normalize(vec3(0.6, 0.8, 0.5));      // 光源方向（固定）
+            float diff = max(dot(n, lightDir), 0.0);             // ステップ4：拡散光（白黒）
             col = vec3(diff);
           }
           gl_FragColor = vec4(col, 1.0);
@@ -178,6 +225,9 @@
     scene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), mainMaterial));
 
     // ─── 可視化パネル作成ユーティリティ ───
+    // 共通の GLSL（CENTERS / SDF / NORMAL / RAYMARCH）を全パネルにも注入し、
+    // 各パネル固有の fragment 本文 (fragmentBody) だけを差し替える。
+    // こうすることで本体と同じ「場」を見ているという保証ができ、本文の説明が崩れない。
     const PANEL_SIZE = 110;
     function makeVisPanel(canvasId, fragmentBody) {
       const c = document.getElementById(canvasId);
@@ -206,19 +256,23 @@
       return { renderer: r, scene: s, camera: cam, material: mat };
     }
 
-    // 1. SDF (z=0 平面の符号付き距離をそのまま色で表現)
+    // ─── ステップ2 の可視化：SDF (z=0 平面の輪切りを色マップ) ───
+    // 3D の場をそのまま見るのは難しいので、z=0 平面で切った断面だけを描く。
+    // レイマーチはしない（=ピクセル位置をそのまま3D空間の点として scene() に渡すだけ）。
     const visSdf = makeVisPanel('vis-sdf', /* glsl */`
       void main() {
-        vec2 p2 = (gl_FragCoord.xy / u_size - 0.5) * 3.0;
-        float d = scene(vec3(p2, 0.0), u_time);
-        // d ≈ -0.5〜1.5 を 0〜1 に正規化して、赤(内)→青(外) に線形マップ
+        vec2 p2 = (gl_FragCoord.xy / u_size - 0.5) * 3.0;   // -1.5〜1.5 の範囲に展開
+        float d = scene(vec3(p2, 0.0), u_time);              // 場の値（z=0 で切る）
+        // d ≈ -0.5〜1.5 を 0〜1 に正規化して、赤(内側=マイナス)→青(外側=プラス) に線形マップ
         float t = clamp((d + 0.5) / 2.0, 0.0, 1.0);
         vec3 col = mix(vec3(1.0, 0.3, 0.1), vec3(0.05, 0.15, 0.45), t);
         gl_FragColor = vec4(col, 1.0);
       }
     `);
 
-    // depth（ヒットまでの距離 t を白黒で）
+    // ─── ステップ3 の可視化：depth ───
+    // 本体と完全に同じレイマーチを走らせて、ヒットまでの距離 t だけを白黒で出す。
+    // 手前=白、奥=黒。膜を事前に作っていないのに各ピクセルが「最初に当たる表面」を発見していることが見える。
     const visDepth = makeVisPanel('vis-depth', /* glsl */`
       void main() {
         vec2 uv = gl_FragCoord.xy / u_size - 0.5;
@@ -230,16 +284,19 @@
       }
     `);
 
-    // 球の軌跡（過去 2 秒分の中心位置を残像として描画）
+    // ─── ステップ1 の可視化：center trails ───
+    // 過去 2 秒分の中心位置（c1〜c4）を残像として描画。
+    // 4個ぶんを 40 サンプル分ループして、古いものほど薄く重ねる。
+    // z は捨てて xy 平面に投影（上面ビュー）。3Dの動きそのものは見えないが、軌道のリズムが見える。
     const visTrails = makeVisPanel('vis-trails', /* glsl */`
       void main() {
         vec2 uv = (gl_FragCoord.xy / u_size - 0.5) * 3.0;
         vec3 col = vec3(0.0);
         for (int i = 0; i < 40; i++) {
-          float dt = float(i) / 40.0 * 2.0;
+          float dt = float(i) / 40.0 * 2.0;                 // 0〜2 秒前
           float t = u_time - dt;
-          vec3 c1, c2, c3, c4; centers(t, c1, c2, c3, c4);
-          float alpha = 1.0 - dt / 2.0;
+          vec3 c1, c2, c3, c4; centers(t, c1, c2, c3, c4);  // 過去時刻の中心位置
+          float alpha = 1.0 - dt / 2.0;                     // 古いほど薄く
           float size = 0.05;
           col += vec3(1.00, 0.45, 0.45) * smoothstep(size, 0.0, length(uv - c1.xy)) * alpha;
           col += vec3(0.45, 1.00, 0.55) * smoothstep(size, 0.0, length(uv - c2.xy)) * alpha;
@@ -250,7 +307,8 @@
       }
     `);
 
-    // diffuse（光源1つ：法線とライト方向のなす角でグレー陰影）
+    // ─── ステップ4 の可視化：diffuse ───
+    // 本体と完全に同じ式（法線とライトの内積で白黒陰影）。本体の縮小版という位置付け。
     const visDiffuse = makeVisPanel('vis-diffuse', /* glsl */`
       void main() {
         vec2 uv = gl_FragCoord.xy / u_size - 0.5;
@@ -260,19 +318,22 @@
         vec3 col = vec3(0.0);
         if (m.hit) {
           vec3 p = ro + rd * m.t;
-          vec3 n = calcNormal(p, u_time);
-          vec3 lightDir = normalize(vec3(0.6, 0.8, 0.5));
-          float diff = max(dot(n, lightDir), 0.0);
+          vec3 n = calcNormal(p, u_time);                    // 法線（場の勾配）
+          vec3 lightDir = normalize(vec3(0.6, 0.8, 0.5));    // 光源方向
+          float diff = max(dot(n, lightDir), 0.0);           // 拡散光
           col = vec3(diff);
         }
         gl_FragColor = vec4(col, 1.0);
       }
     `);
 
+    // 本文の4ステップと同じ順番で並べておく：動き → 場 → 距離 → 色
     const visPanels = [
       visTrails, visSdf, visDepth, visDiffuse,
     ];
 
+    // 毎フレーム、本体と全パネルに同じ u_time を流し込んでから render する。
+    // → どのパネルも「同じ瞬間のシーン」を見ていることが保証される。
     const clock = new THREE.Clock();
     function loop() {
       requestAnimationFrame(loop);

@@ -83,27 +83,27 @@
 
     <ol class="samples">
       <li class="sample">
-        <a href="./01_fragment_canvas.html">
-          <h2><span class="tag">01</span>フラグメントシェーダーで一枚絵（3Dメタボール）</h2>
-          <p>画面いっぱいの板1枚と fragment shader だけで、レイマーチングによる3Dメタボールを描く。</p>
-        </a>
-      </li>
-      <li class="sample">
-        <a href="./02_vertex_distort.html">
-          <h2><span class="tag">02</span>vertex shader で図形を歪ませる</h2>
+        <a href="./vertex_distort.html">
+          <h2>vertex shader で図形を歪ませる</h2>
           <p>onBeforeCompile で MeshStandardMaterial の頂点だけパッチ。ライト・影はそのまま残して球を波打たせる。</p>
         </a>
       </li>
       <li class="sample">
-        <a href="./03_post_process.html">
-          <h2><span class="tag">03</span>ポストプロセス（鳥瞰の街 + 色収差）</h2>
-          <p>vol_09 の鳥瞰ビューに、画面端ほど強くなる色収差（chromatic aberration）を上乗せ。スクロールでカメラ移動。</p>
+        <a href="./particles.html">
+          <h2>パーティクル（3万粒）</h2>
+          <p>BufferGeometry + Points + ShaderMaterial。vertex shader で粒を動かし、加算合成で光感を出す。</p>
         </a>
       </li>
       <li class="sample">
-        <a href="./04_particles.html">
-          <h2><span class="tag">04</span>パーティクル（3万粒）</h2>
-          <p>BufferGeometry + Points + ShaderMaterial。vertex shader で粒を動かし、加算合成で光感を出す。</p>
+        <a href="./post_process.html">
+          <h2>ポストプロセス（鳥瞰の街 + 色収差 + ビネット）</h2>
+          <p>vol_09 の鳥瞰ビューに、自作の ShaderPass を2枚重ねてレトロレンズ感を出す。スクロールでカメラ移動。</p>
+        </a>
+      </li>
+      <li class="sample">
+        <a href="./fragment_canvas.html">
+          <h2>フラグメントシェーダーで一枚絵（3Dメタボール）</h2>
+          <p>画面いっぱいの板1枚と fragment shader だけで、レイマーチング+SDFによる3Dメタボールを描く。補助パネル4枚付き。</p>
         </a>
       </li>
     </ol>
