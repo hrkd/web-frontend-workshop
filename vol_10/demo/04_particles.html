@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>vol_10 / 04 — パーティクル（3万粒）</title>
+  <style>
+    html, body { margin: 0; height: 100%; overflow: hidden; background: #000010; }
+    canvas { display: block; }
+    .label {
+      position: fixed;
+      top: 1rem;
+      left: 1rem;
+      color: #fff;
+      font-family: system-ui, sans-serif;
+      font-size: 0.9rem;
+      opacity: 0.7;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="label">サンプル04：パーティクル（Points + ShaderMaterial）</div>
+  <canvas id="c"></canvas>
+
+  <script type="importmap">
+    { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
+  </script>
+  <script type="module">
+    import * as THREE from 'three';
+
+    const renderer = new THREE.WebGLRenderer({
+      canvas: document.getElementById('c'),
+      antialias: true,
+    });
+    renderer.setClearColor(0x000010);
+    renderer.setSize(innerWidth, innerHeight);
+
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.1, 100);
+    camera.position.z = 6;
+
+    // ─── 3万個の頂点を持つ BufferGeometry ───
+    const N = 30000;
+    const positions = new Float32Array(N * 3);
+    const seeds     = new Float32Array(N);
+    for (let i = 0; i < N; i++) {
+      positions[i * 3 + 0] = (Math.random() - 0.5) * 10;
+      positions[i * 3 + 1] = (Math.random() - 0.5) * 10;
+      positions[i * 3 + 2] = (Math.random() - 0.5) * 10;
+      seeds[i] = Math.random();
+    }
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    geometry.setAttribute('a_seed',   new THREE.BufferAttribute(seeds, 1));
+
+    // ─── 粒1個ずつを動かす ShaderMaterial ───
+    const material = new THREE.ShaderMaterial({
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      uniforms: {
+        u_time: { value: 0 },
+      },
+      vertexShader: /* glsl */`
+        uniform float u_time;
+        attribute float a_seed;
+        varying float v_seed;
+
+        void main() {
+          v_seed = a_seed;
+
+          vec3 p = position;
+          p.x += sin(u_time * 0.5 + a_seed * 6.28) * 0.4;
+          p.y += cos(u_time * 0.5 + a_seed * 6.28) * 0.4;
+
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
+          gl_PointSize = 2.0 + a_seed * 3.0;
+        }
+      `,
+      fragmentShader: /* glsl */`
+        varying float v_seed;
+        void main() {
+          // 四角い点を円形にくり抜く
+          vec2 c = gl_PointCoord - 0.5;
+          float d = length(c);
+          if (d > 0.5) discard;
+
+          float alpha = smoothstep(0.5, 0.0, d);
+          vec3 col = mix(vec3(0.4, 0.7, 1.0), vec3(1.0, 0.7, 0.9), v_seed);
+          gl_FragColor = vec4(col, alpha);
+        }
+      `,
+    });
+
+    const points = new THREE.Points(geometry, material);
+    scene.add(points);
+
+    const clock = new THREE.Clock();
+    function loop() {
+      requestAnimationFrame(loop);
+      material.uniforms.u_time.value = clock.getElapsedTime();
+      points.rotation.y += 0.001;
+      renderer.render(scene, camera);
+    }
+    loop();
+
+    window.addEventListener('resize', () => {
+      camera.aspect = innerWidth / innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(innerWidth, innerHeight);
+    });
+  </script>
+</body>
+</html>
