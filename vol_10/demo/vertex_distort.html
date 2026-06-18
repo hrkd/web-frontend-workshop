@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>vol_10 — vertex shader で図形を歪ませる</title>
+  <style>
+    html, body { margin: 0; height: 100%; overflow: hidden; background: #0a0e15; }
+    canvas { display: block; }
+    .label {
+      position: fixed;
+      top: 1rem;
+      left: 1rem;
+      color: #fff;
+      font-family: system-ui, sans-serif;
+      font-size: 0.9rem;
+      opacity: 0.7;
+      pointer-events: none;
+    }
+    .overlay {
+      position: fixed;
+      right: 1rem;
+      bottom: 1rem;
+      width: 200px;
+      height: 200px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 8px;
+      overflow: hidden;
+      background: #000;
+    }
+    .overlay canvas { width: 100%; height: 100%; }
+    .overlay-label {
+      position: absolute;
+      left: 0.5rem;
+      bottom: 0.4rem;
+      color: #fff;
+      font-family: system-ui, sans-serif;
+      font-size: 0.7rem;
+      opacity: 0.85;
+      mix-blend-mode: difference;
+      pointer-events: none;
+    }
+    .controls {
+      position: fixed;
+      top: 3rem;
+      left: 1rem;
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      color: #fff;
+      font-family: system-ui, sans-serif;
+      font-size: 0.85rem;
+      background: rgba(0, 0, 0, 0.35);
+      padding: 0.45rem 0.75rem;
+      border-radius: 6px;
+    }
+    .controls input[type=range] { width: 180px; }
+    .controls .value {
+      font-variant-numeric: tabular-nums;
+      opacity: 0.8;
+      min-width: 2.5rem;
+      text-align: right;
+    }
+  </style>
+</head>
+<body>
+  <div class="label">vertex shader で図形を歪ませる（onBeforeCompile）</div>
+  <canvas id="c"></canvas>
+
+  <div class="controls">
+    <label for="amp">振幅</label>
+    <input type="range" id="amp" min="0" max="1" step="0.01" value="0.5">
+    <span class="value" id="amp-val">0.50</span>
+  </div>
+
+  <div class="overlay">
+    <canvas id="overlay-c"></canvas>
+    <div class="overlay-label">球面マップ（緯度経度展開）</div>
+  </div>
+
+  <script type="importmap">
+    { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
+  </script>
+  <script type="module">
+    import * as THREE from 'three';
+
+    // ─── 本体とプレビューで共通の wave 関数 ───
+    // ここの式を書き換えると、球の歪みと右下の白黒プレビューが同時に変わる
+    const WAVE_GLSL = /* glsl */`
+      float wave(vec3 p, float t) {
+        return sin(p.x * 10.0 + t * 1.0)
+             * cos(p.y * 10.0 + t * 1.0)
+             * sin(p.z * 10.0 + t * 0.7);
+      }
+    `;
+
+    const renderer = new THREE.WebGLRenderer({
+      canvas: document.getElementById('c'),
+      antialias: true,
+    });
+    renderer.setSize(innerWidth, innerHeight);
+
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.1, 100);
+    camera.position.set(0, 0, 4);
+
+    // 細かく分割した球（波打ちが見える程度の頂点数を確保）
+    const geometry = new THREE.SphereGeometry(1, 128, 128);
+    const material = new THREE.MeshStandardMaterial({
+      color: 0x00aaff,
+      roughness: 0.4,
+      metalness: 0.1,
+    });
+
+    // 同じ wave 式を差し込む共通の onBeforeCompile（本体・ワイヤーフレーム両方で再利用）
+    function patchDistort(mat) {
+      mat.onBeforeCompile = (shader) => {
+        shader.uniforms.u_time = { value: 0 };
+        shader.uniforms.u_amplitude = { value: 0.5 };
+        shader.vertexShader = `
+          uniform float u_time;
+          uniform float u_amplitude;
+          ${WAVE_GLSL}
+          ${shader.vertexShader}
+        `.replace(
+          '#include <begin_vertex>',
+          `
+          vec3 transformed = position;
+          transformed += normal * wave(position, u_time) * u_amplitude;
+          `
+        );
+        mat.userData.shader = shader;
+      };
+    }
+
+    // 本体（ライト・影を効かせる）
+    patchDistort(material);
+    const mesh = new THREE.Mesh(geometry, material);
+    scene.add(mesh);
+
+    // ワイヤーフレーム（同じ歪みを適用して上から薄く重ねる）
+    const wireMaterial = new THREE.MeshBasicMaterial({
+      color: 0xffffff,
+      wireframe: true,
+      transparent: true,
+      opacity: 0.25,
+    });
+    patchDistort(wireMaterial);
+    // z-fighting を避けるため、ほんの少しだけスケールを大きく
+    const wireMesh = new THREE.Mesh(geometry, wireMaterial);
+    wireMesh.scale.setScalar(1.001);
+    scene.add(wireMesh);
+
+    scene.add(new THREE.AmbientLight(0xffffff, 0.4));
+    const dir = new THREE.DirectionalLight(0xffffff, 1.0);
+    dir.position.set(3, 3, 5);
+    scene.add(dir);
+
+    // 振幅スライダー
+    const ampInput = document.getElementById('amp');
+    const ampVal = document.getElementById('amp-val');
+    ampInput.addEventListener('input', () => {
+      const v = parseFloat(ampInput.value);
+      ampVal.textContent = v.toFixed(2);
+      if (material.userData.shader) {
+        material.userData.shader.uniforms.u_amplitude.value = v;
+      }
+      if (wireMaterial.userData.shader) {
+        wireMaterial.userData.shader.uniforms.u_amplitude.value = v;
+      }
+      overlayMaterial.uniforms.u_amplitude.value = v;
+    });
+
+    // ─── 右下：同じ wave 関数を平面に投影する白黒プレビュー ───
+    const overlayRenderer = new THREE.WebGLRenderer({
+      canvas: document.getElementById('overlay-c'),
+      antialias: true,
+    });
+    overlayRenderer.setSize(200, 200);
+    const overlayScene = new THREE.Scene();
+    const overlayCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+    const overlayMaterial = new THREE.ShaderMaterial({
+      uniforms: {
+        u_time: { value: 0 },
+        u_amplitude: { value: 0.5 },
+      },
+      vertexShader: /* glsl */`
+        varying vec2 vUv;
+        void main() {
+          vUv = uv;
+          gl_Position = vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: /* glsl */`
+        precision mediump float;
+        uniform float u_time;
+        uniform float u_amplitude;
+        varying vec2 vUv;
+        ${WAVE_GLSL}
+        void main() {
+          // 緯度経度から球面上の点を構成（半径1の球の表面そのもの）
+          // 横軸 = 経度 0〜2π、縦軸 = 緯度 -π/2〜π/2
+          float theta = vUv.x * 6.2831853;
+          float phi   = (vUv.y - 0.5) * 3.1415927;
+          float cy = cos(phi);
+          vec3 p = vec3(cos(theta) * cy, sin(phi), sin(theta) * cy);
+          // 本体の頂点と同じ位置を渡して同じ式を評価
+          float w = wave(p, u_time) * u_amplitude;
+          float gray = w * 0.5 + 0.5;
+          gl_FragColor = vec4(vec3(gray), 1.0);
+        }
+      `,
+    });
+    overlayScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), overlayMaterial));
+
+    const clock = new THREE.Clock();
+    function loop() {
+      requestAnimationFrame(loop);
+      const t = clock.getElapsedTime();
+      if (material.userData.shader) {
+        material.userData.shader.uniforms.u_time.value = t;
+      }
+      if (wireMaterial.userData.shader) {
+        wireMaterial.userData.shader.uniforms.u_time.value = t;
+      }
+      overlayMaterial.uniforms.u_time.value = t;
+      renderer.render(scene, camera);
+      overlayRenderer.render(overlayScene, overlayCamera);
+    }
+    loop();
+
+    window.addEventListener('resize', () => {
+      camera.aspect = innerWidth / innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(innerWidth, innerHeight);
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>vol_10 — 鳥瞰の街にポストプロセス（色収差 + ビネット）</title>
+  <style>
+    body { margin: 0; font-family: system-ui, sans-serif; background: #000; }
+    #bg { position: fixed; inset: 0; z-index: 0; }
+    .spacer { height: 400vh; }
+    .label {
+      position: fixed;
+      top: 1rem;
+      left: 1rem;
+      color: #fff;
+      font-family: system-ui, sans-serif;
+      font-size: 0.9rem;
+      opacity: 0.7;
+      pointer-events: none;
+      z-index: 1;
+      mix-blend-mode: difference;
+    }
+  </style>
+</head>
+<body>
+  <div class="label">鳥瞰の街にポストプロセス（色収差 + ビネット）／ スクロールでカメラ移動</div>
+  <canvas id="bg"></canvas>
+  <div class="spacer"></div>
+
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
+  <script type="module">
+    import * as THREE from 'three';
+    import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+    import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+    import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+
+    const canvas = document.getElementById('bg');
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+    renderer.setSize(innerWidth, innerHeight);
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xffffff); // vol_09 と同じ白背景
+
+    // ─── 並行投影カメラ（鳥瞰ビュー）：vol_09 と同じ設定 ───
+    const aspect0 = innerWidth / innerHeight;
+    const viewSize = 10;
+    const camera = new THREE.OrthographicCamera(
+      -viewSize * aspect0, viewSize * aspect0,
+       viewSize, -viewSize,
+       0.1, 200
+    );
+    camera.position.set(-20, 20, 20);
+    camera.lookAt(0, 0, 0);
+
+    // 真っ白の地面（vol_09 と同じ）
+    const ground = new THREE.Mesh(
+      new THREE.PlaneGeometry(400, 200),
+      new THREE.MeshStandardMaterial({ color: 0xffffff })
+    );
+    ground.rotation.x = -Math.PI / 2;
+    scene.add(ground);
+
+    // ─── 街：ライトトーンのブルー（vol_09 と同じ） ───
+    const palette = [0x88bbee, 0xaaccee, 0xbbddf2, 0xcce4f5];
+    for (let i = 0; i < 60; i++) {
+      const h = 1 + Math.random() * 3;
+      const building = new THREE.Mesh(
+        new THREE.BoxGeometry(1, h, 1),
+        new THREE.MeshLambertMaterial({ color: palette[i % palette.length] })
+      );
+      building.position.set(i * 3 - 30, h / 2, (i % 2) * 2);
+      scene.add(building);
+    }
+
+    // 全体を明るく + 立体感のため複数方向からライティング（vol_09 と同じ）
+    scene.add(new THREE.AmbientLight(0xffffff, 1.4));
+    const sun = new THREE.DirectionalLight(0xffffff, 1.2);
+    sun.position.set(5, 10, 5);
+    scene.add(sun);
+    const fill = new THREE.DirectionalLight(0xffffff, 0.6);
+    fill.position.set(-8, 6, -5);
+    scene.add(fill);
+
+    // ─── ポストプロセスのパイプライン ───
+    const composer = new EffectComposer(renderer);
+    composer.setSize(innerWidth, innerHeight);
+
+    // 1. シーンを画像に焼く
+    composer.addPass(new RenderPass(scene, camera));
+
+    // 2. 自作の色収差シェーダーパス（中心からの距離に応じて強くなる）
+    const chromaticAberration = {
+      uniforms: {
+        tDiffuse: { value: null },
+        u_amount: { value: 0.012 },
+      },
+      vertexShader: /* glsl */`
+        varying vec2 vUv;
+        void main() {
+          vUv = uv;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: /* glsl */`
+        uniform sampler2D tDiffuse;
+        uniform float u_amount;
+        varying vec2 vUv;
+        void main() {
+          // 画面中央から外側に向けてズラす（端ほど強い）
+          vec2 dir = vUv - 0.5;
+          float r = texture2D(tDiffuse, vUv + dir * u_amount).r;
+          float g = texture2D(tDiffuse, vUv).g;
+          float b = texture2D(tDiffuse, vUv - dir * u_amount).b;
+          gl_FragColor = vec4(r, g, b, 1.0);
+        }
+      `,
+    };
+    composer.addPass(new ShaderPass(chromaticAberration));
+
+    // 3. 周辺減光（ビネット）：レトロレンズ感の仕上げ
+    const vignette = {
+      uniforms: {
+        tDiffuse: { value: null },
+        u_intensity: { value: 0.6 }, // 0=効果なし、1=四隅が真っ黒
+      },
+      vertexShader: /* glsl */`
+        varying vec2 vUv;
+        void main() {
+          vUv = uv;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: /* glsl */`
+        uniform sampler2D tDiffuse;
+        uniform float u_intensity;
+        varying vec2 vUv;
+        void main() {
+          vec4 src = texture2D(tDiffuse, vUv);
+          // 中央=明るく(1.0)、四隅=暗く(0.0) の係数
+          float dist = length(vUv - 0.5);
+          float v = smoothstep(0.75, 0.2, dist);
+          // 0〜u_intensity の幅で減光（u_intensity が控えめならじんわり）
+          v = mix(1.0 - u_intensity, 1.0, v);
+          gl_FragColor = vec4(src.rgb * v, src.a);
+        }
+      `,
+    };
+    composer.addPass(new ShaderPass(vignette));
+
+    // ─── スクロール連動でカメラを横移動 ───
+    function updateCamera() {
+      const ratio = window.scrollY / (document.body.scrollHeight - innerHeight);
+      camera.position.x = 60 - ratio * 100;
+      camera.lookAt(camera.position.x + 20, 0, camera.position.z - 20);
+    }
+    window.addEventListener('scroll', updateCamera);
+    updateCamera();
+
+    function loop() {
+      requestAnimationFrame(loop);
+      composer.render(); // renderer.render ではなく composer.render
+    }
+    loop();
+
+    window.addEventListener('resize', () => {
+      const a = innerWidth / innerHeight;
+      camera.left = -viewSize * a;
+      camera.right = viewSize * a;
+      camera.updateProjectionMatrix();
+      renderer.setSize(innerWidth, innerHeight);
+      composer.setSize(innerWidth, innerHeight);
+    });
+  </script>
+</body>
+</html>
